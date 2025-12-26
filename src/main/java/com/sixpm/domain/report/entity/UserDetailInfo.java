@@ -83,9 +83,6 @@ public class UserDetailInfo {
     @Column(name = "is_priority_supply", nullable = false)
     private Boolean isPrioritySupply;
 
-    @Column(name = "has_housing_history", nullable = false)
-    private Boolean hasHousingHistory;
-
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
