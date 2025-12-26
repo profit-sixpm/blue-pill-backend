@@ -16,6 +16,9 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 /**
@@ -29,6 +32,9 @@ public class AnnouncementService {
     private final AnnouncementApiService announcementApiService;
     private final com.sixpm.domain.announcement.repository.AnnouncementRepository announcementRepository;
     private final AnnouncementProcessingService announcementProcessingService;
+
+    // Virtual Thread Executor (Java 21+)
+    private final ExecutorService virtualThreadExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
     /**
      * 특정 날짜의 청약 공고를 조회하고 PDF를 S3에 업로드
@@ -69,14 +75,33 @@ public class AnnouncementService {
 
                 log.info("Processing page {}, items count: {}", page, items.size());
 
-                // 2. 각 공고에 대해 처리 (LH API는 DTL_URL만 제공)
-                for (AnnouncementListApiResponse.AnnouncementItem item : items) {
+                // 2. 각 공고에 대해 병렬 처리 (Virtual Thread 사용)
+                List<CompletableFuture<AnnouncementFetchResponse.ProcessedAnnouncement>> futures = items.stream()
+                        .map(item -> CompletableFuture.supplyAsync(() -> {
+                            try {
+                                return processAnnouncement(item, request.getAnnouncementDate());
+                            } catch (Exception e) {
+                                log.error("Error processing LH announcement: {} - {}",
+                                        item.getPanId(), item.getPanNm(), e);
+                                return AnnouncementFetchResponse.ProcessedAnnouncement.builder()
+                                        .houseManageNo(item.getPanId())
+                                        .pblancNo(item.getPanNm())
+                                        .houseNm(item.getPanNm())
+                                        .status("FAILED")
+                                        .errorMessage(e.getMessage())
+                                        .build();
+                            }
+                        }, virtualThreadExecutor))
+                        .toList();
+
+                // 모든 Future 완료 대기
+                CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+
+                // 결과 수집
+                for (CompletableFuture<AnnouncementFetchResponse.ProcessedAnnouncement> future : futures) {
                     try {
                         processedCount++;
-
-                        AnnouncementFetchResponse.ProcessedAnnouncement processed =
-                                processAnnouncement(item, request.getAnnouncementDate());
-
+                        AnnouncementFetchResponse.ProcessedAnnouncement processed = future.get();
                         processedList.add(processed);
 
                         if ("SUCCESS".equals(processed.getStatus())) {
@@ -85,17 +110,8 @@ public class AnnouncementService {
                             failedCount++;
                         }
                     } catch (Exception e) {
-                        log.error("Error processing LH announcement: {} - {}",
-                                item.getPanId(), item.getPanNm(), e);
+                        log.error("Error getting future result", e);
                         failedCount++;
-
-                        processedList.add(AnnouncementFetchResponse.ProcessedAnnouncement.builder()
-                                .houseManageNo(item.getPanId())
-                                .pblancNo(item.getPanNm())
-                                .houseNm(item.getPanNm())
-                                .status("FAILED")
-                                .errorMessage(e.getMessage())
-                                .build());
                     }
                 }
 
