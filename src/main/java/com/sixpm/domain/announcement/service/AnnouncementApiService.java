@@ -8,7 +8,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
 
+import java.time.Duration;
 import java.util.List;
 
 /**
@@ -72,6 +74,51 @@ public class AnnouncementApiService {
     }
 
     /**
+     * LH 분양임대공고별 상세정보 조회 (비동기)
+     *
+     * @param panId 공고ID (PAN_ID)
+     * @param splInfTpCd 공급정보구분코드 (SPL_INF_TP_CD)
+     * @param ccrCnntSysDsCd 고객센터연계시스템구분코드 (CCR_CNNT_SYS_DS_CD)
+     * @param uppAisTpCd 상위매물유형코드 (UPP_AIS_TP_CD)
+     * @return 청약 공고 상세 (Mono)
+     */
+    public Mono<AnnouncementDetailApiResponse> getAnnouncementDetailAsync(
+            String panId,
+            String splInfTpCd,
+            String ccrCnntSysDsCd,
+            String uppAisTpCd) {
+
+        log.debug("Fetching LH announcement detail async for panId: {}", panId);
+
+        return webClient.get()
+                .uri(uriBuilder -> uriBuilder
+                        .scheme("http")
+                        .host("apis.data.go.kr")
+                        .path("/B552555/lhLeaseNoticeDtlInfo1/getLeaseNoticeDtlInfo1")
+                        .queryParam("serviceKey", serviceKey)
+                        .queryParam("PAN_ID", panId)
+                        .queryParam("SPL_INF_TP_CD", splInfTpCd)
+                        .queryParam("CCR_CNNT_SYS_DS_CD", ccrCnntSysDsCd)
+                        .queryParam("UPP_AIS_TP_CD", uppAisTpCd)
+                        .build())
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<List<AnnouncementDetailApiResponse>>() {})
+                .timeout(Duration.ofSeconds(10))
+                .map(responseList -> {
+                    if (responseList != null && responseList.size() > 1) {
+                        return responseList.get(1);
+                    }
+                    return null;
+                })
+                .doOnSuccess(response -> {
+                    if (response != null) {
+                        log.debug("Detail API response for {}: success={}", panId, response.isSuccess());
+                    }
+                })
+                .doOnError(e -> log.error("Error fetching detail async for panId: {}", panId, e));
+    }
+
+    /**
      * LH 분양임대공고별 상세정보 조회
      *
      * API: /B552555/lhLeaseNoticeDtlInfo1/getLeaseNoticeDtlInfo1
@@ -91,38 +138,8 @@ public class AnnouncementApiService {
         log.info("Fetching LH announcement detail for panId: {}, splInfTpCd: {}", panId, splInfTpCd);
 
         try {
-            // LH API는 배열 응답을 반환: [{"dsSch": [...]}, {"dsAhflInfo": [...], "resHeader": [...], ...}]
-            // 두 번째 요소에 실제 데이터가 있음
-            List<AnnouncementDetailApiResponse> responseList = webClient.get()
-                    .uri(uriBuilder -> uriBuilder
-                            .scheme("http")
-                            .host("apis.data.go.kr")
-                            .path("/B552555/lhLeaseNoticeDtlInfo1/getLeaseNoticeDtlInfo1")
-                            .queryParam("serviceKey", serviceKey)
-                            .queryParam("PAN_ID", panId)                      // 공고ID
-                            .queryParam("SPL_INF_TP_CD", splInfTpCd)          // 공급정보구분코드
-                            .queryParam("CCR_CNNT_SYS_DS_CD", ccrCnntSysDsCd) // 고객센터연계시스템구분코드
-                            .queryParam("UPP_AIS_TP_CD", uppAisTpCd)          // 상위매물유형코드
-                            .build())
-                    .retrieve()
-                    .bodyToMono(new ParameterizedTypeReference<List<AnnouncementDetailApiResponse>>() {})
+            return getAnnouncementDetailAsync(panId, splInfTpCd, ccrCnntSysDsCd, uppAisTpCd)
                     .block();
-
-            // 두 번째 요소가 실제 데이터
-            AnnouncementDetailApiResponse response = null;
-            if (responseList != null && responseList.size() > 1) {
-                response = responseList.get(1);  // 두 번째 요소!
-            }
-
-            if (response != null) {
-                log.info("Detail API response for {}: success={}, attachments={}",
-                        panId,
-                        response.isSuccess(),
-                        response.getAttachmentFiles() != null ? response.getAttachmentFiles().size() : 0);
-            }
-
-            log.info("Successfully fetched LH announcement detail");
-            return response;
         } catch (Exception e) {
             log.error("Error fetching LH announcement detail for panId: {}", panId, e);
             throw new RuntimeException("LH 청약 공고 상세 조회 실패: " + e.getMessage(), e);
