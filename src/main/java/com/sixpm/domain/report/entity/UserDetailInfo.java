@@ -117,5 +117,30 @@ public class UserDetailInfo {
         this.isSeverelyDisabled = isSeverelyDisabled;
         this.isPrioritySupply = isPrioritySupply;
     }
+
+    public void update(Integer age, String residenceArea, Integer residencePeriod,
+                       Integer householdMembers, Integer minorChildren, Boolean isHomelessHouseholder,
+                       Boolean isSingleParent, Boolean isMarried, Integer monthlyIncome,
+                       Integer totalAssets, Integer carValue, Boolean hasSavingsAccount,
+                       Integer paymentCount, String additionalQualifications, Boolean isDisabled,
+                       Boolean isSeverelyDisabled, Boolean isPrioritySupply) {
+        this.age = age;
+        this.residenceArea = residenceArea;
+        this.residencePeriod = residencePeriod;
+        this.householdMembers = householdMembers;
+        this.minorChildren = minorChildren;
+        this.isHomelessHouseholder = isHomelessHouseholder;
+        this.isSingleParent = isSingleParent;
+        this.isMarried = isMarried;
+        this.monthlyIncome = monthlyIncome;
+        this.totalAssets = totalAssets;
+        this.carValue = carValue;
+        this.hasSavingsAccount = hasSavingsAccount;
+        this.paymentCount = paymentCount;
+        this.additionalQualifications = additionalQualifications;
+        this.isDisabled = isDisabled;
+        this.isSeverelyDisabled = isSeverelyDisabled;
+        this.isPrioritySupply = isPrioritySupply;
+    }
 }
 

@@ -7,7 +7,6 @@ import com.sixpm.domain.announcement.entity.AnnouncementCriteria;
 import com.sixpm.domain.announcement.repository.AnnouncementCriteriaRepository;
 import com.sixpm.domain.announcement.repository.AnnouncementRepository;
 import com.sixpm.domain.report.dto.request.CreateReportRequest;
-import com.sixpm.domain.report.dto.request.SearchQueryRequest;
 import com.sixpm.domain.report.dto.response.AiConsulting;
 import com.sixpm.domain.report.dto.response.DetailItem;
 import com.sixpm.domain.report.dto.response.ReportResponse;
@@ -28,10 +27,13 @@ import org.springframework.ai.document.Document;
 import org.springframework.ai.rag.Query;
 import org.springframework.ai.rag.advisor.RetrievalAugmentationAdvisor;
 import org.springframework.ai.rag.generation.augmentation.ContextualQueryAugmenter;
+import org.springframework.ai.rag.preretrieval.query.expansion.MultiQueryExpander;
 import org.springframework.ai.rag.preretrieval.query.transformation.RewriteQueryTransformer;
 import org.springframework.ai.rag.retrieval.search.VectorStoreDocumentRetriever;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -50,31 +52,43 @@ public class ReportService {
     private final AnnouncementRepository announcementRepository;
     private final AnnouncementCriteriaRepository criteriaRepository;
     private final RewriteQueryTransformer queryTransformer;
+    private final MultiQueryExpander queryExpander;
     private final ChatClient chatClient;
     private final RetrievalAugmentationAdvisor ragAdvisor;
+    private final Resource systemPromptResource;
 
     public ReportService(
             UserDetailInfoRepository userDetailInfoRepository,
             VectorStore vectorStore,
             AnnouncementRepository announcementRepository,
             AnnouncementCriteriaRepository criteriaRepository,
-            ChatClient.Builder chatClientBuilder
+            ChatClient.Builder chatClientBuilder,
+            @Value("classpath:prompts/consulting-system-prompt.txt") Resource systemPromptResource
     ) {
         this.userDetailInfoRepository = userDetailInfoRepository;
         this.vectorStore = vectorStore;
         this.announcementRepository = announcementRepository;
         this.criteriaRepository = criteriaRepository;
+        this.systemPromptResource = systemPromptResource;
 
+        this.chatClient = chatClientBuilder.build();
+
+        // 1. 쿼리 변환기 (검색어 최적화)
         this.queryTransformer = RewriteQueryTransformer.builder()
                 .chatClientBuilder(chatClientBuilder)
                 .build();
-        this.chatClient = chatClientBuilder.build();
 
-        // RAG Advisor 초기화
+        // 2. 쿼리 확장기 (다각도 검색)
+        this.queryExpander = MultiQueryExpander.builder()
+                .chatClientBuilder(chatClientBuilder)
+                .numberOfQueries(3)
+                .build();
+
+        // 3. RAG Advisor 구성
         var documentRetriever = VectorStoreDocumentRetriever.builder()
                 .vectorStore(vectorStore)
                 .similarityThreshold(0.5)
-                .topK(10)
+                .topK(5)
                 .build();
 
         var queryAugmenter = ContextualQueryAugmenter.builder()
@@ -88,30 +102,36 @@ public class ReportService {
     }
 
     /**
-     * 공고 자연어 검색 (RAG + Query Optimization)
+     * 공고 자연어 검색 (RAG + Query Optimization + Expansion)
      */
     public List<AnnouncementItem> searchAnnouncements(String query) {
         log.info("Original query: {}", query);
 
-        // 1. 쿼리 최적화 (Rewrite)
+        // 1. 쿼리 최적화
         Query originalQuery = new Query(query);
         Query optimizedQuery = queryTransformer.transform(originalQuery);
-
         log.info("Optimized query: {}", optimizedQuery.text());
 
-        // 2. Vector Store 검색 (유사도 0.5 이상, 상위 20개)
-        List<Document> documents = vectorStore.similaritySearch(
-                SearchRequest.builder().query(optimizedQuery.text())
-                        .topK(5)
-                        .similarityThreshold(0.5)
-                        .build()
-        );
+        // 2. 쿼리 확장
+        List<Query> expandedQueries = queryExpander.expand(optimizedQuery);
+        log.info("Expanded queries: {}", expandedQueries.stream().map(Query::text).toList());
+
+        // 3. Vector Store 검색
+        List<Document> documents = new ArrayList<>();
+        for (Query q : expandedQueries) {
+            documents.addAll(vectorStore.similaritySearch(
+                    SearchRequest.builder().query(q.text())
+                            .topK(5)
+                            .similarityThreshold(0.5)
+                            .build()
+            ));
+        }
 
         if (documents.isEmpty()) {
             return Collections.emptyList();
         }
 
-        // 3. 공고 ID 추출 (중복 제거)
+        // 4. 공고 ID 추출 (중복 제거)
         Set<Long> announcementIds = documents.stream()
                 .map(doc -> {
                     Object idObj = doc.getMetadata().get("notice_id");
@@ -124,10 +144,8 @@ public class ReportService {
             return Collections.emptyList();
         }
 
-        // 4. DB에서 공고 정보 조회
+        // 5. DB 조회 및 반환
         List<Announcement> announcements = announcementRepository.findAllById(announcementIds);
-
-        // 5. DTO 변환 및 반환
         return announcements.stream()
                 .map(this::convertToAnnouncementItem)
                 .collect(Collectors.toList());
@@ -141,54 +159,109 @@ public class ReportService {
         Long userId = getCurrentUserId();
         log.info("Generating report for user: {}, announcement: {}", userId, request.getAnnouncementId());
 
-        // 1. 데이터 로드
         Announcement announcement = announcementRepository.findById(request.getAnnouncementId())
                 .orElseThrow(() -> new IllegalArgumentException("공고를 찾을 수 없습니다."));
         AnnouncementCriteria criteria = criteriaRepository.findByAnnouncementId(announcement.getId())
                 .orElseThrow(() -> new IllegalArgumentException("해당 공고의 상세 자격 요건 정보가 없습니다."));
 
-        // 2. 정량 분석 (Rule Engine)
+        // 정량 분석
         List<DetailItem> details = analyzeEligibility(request, criteria);
-
-        // 3. 최종 상태 및 점수 결정
+        
         boolean isAllPassed = details.stream().filter(d -> !d.category().equals("가점")).allMatch(DetailItem::passed);
         String status = isAllPassed ? "PASS" : "FAIL";
         int totalScore = calculateTotalScore(request, criteria);
 
-        // 4. 정성 분석 (AI 컨설팅)
+        // 정성 분석 (AI 컨설팅)
         AiConsulting consulting = generateAiConsulting(request, announcement, status, details);
 
-        // 사용자 상세 정보 저장 (이력 관리용)
         saveUserDetailInfo(userId, request);
 
         return new ReportResponse(status, totalScore, details, consulting);
     }
 
-    private void saveUserDetailInfo(Long userId, CreateReportRequest request) {
-        // 기존 데이터가 있으면 삭제 (최신 정보 유지)
-        userDetailInfoRepository.findByUserId(userId)
-                .ifPresent(userDetailInfoRepository::delete);
+    /**
+     * LLM을 사용한 정성적 조언 생성 (RAG 적용)
+     */
+    private AiConsulting generateAiConsulting(CreateReportRequest user, Announcement announcement, String status, List<DetailItem> details) {
+        String userProfileStr = formatUserProfile(user);
+        String analysisResultStr = details.stream()
+                .map(d -> String.format("- %s: %s (%s)", d.category(), d.passed() ? "충족" : "미충족", d.message()))
+                .collect(Collectors.joining("\n"));
 
-        UserDetailInfo userDetailInfo = UserDetailInfo.builder()
-                .userId(userId)
-                .age(request.getAge())
-                .residenceArea(request.getResidenceArea())
-                .residencePeriod(request.getResidencePeriod())
-                .householdMembers(request.getHouseholdMembers())
-                .minorChildren(request.getMinorChildren())
-                .isHomelessHouseholder(request.getIsHomelessHouseholder())
-                .isSingleParent(request.getIsSingleParent())
-                .isMarried(request.getIsMarried())
-                .monthlyIncome(request.getMonthlyIncome())
-                .totalAssets(request.getTotalAssets())
-                .carValue(request.getCarValue())
-                .hasSavingsAccount(request.getHasSavingsAccount())
-                .paymentCount(request.getPaymentCount())
-                .additionalQualifications(request.getAdditionalQualifications())
-                .isDisabled(request.getIsDisabled())
-                .isSeverelyDisabled(request.getIsSeverelyDisabled())
-                .isPrioritySupply(request.getIsPrioritySupply())
-                .build();
+        String userPrompt;
+        if ("PASS".equals(status)) {
+            userPrompt = """
+                이 공고의 '당첨자 선정 방법', '가점 기준', '제출 서류', '계약 체결 절차' 정보를 중점적으로 검색해서 알려줘.
+                그리고 이를 바탕으로 당첨 확률을 높일 수 있는 전략과, 입주까지의 구체적인 로드맵(자금, 서류 등)을 조언해줘.
+                """;
+        } else {
+            userPrompt = """
+                이 공고의 '신청 자격', '소득 및 자산 보유 기준', '공급 대상별 세부 요건' 정보를 중점적으로 검색해서 알려줘.
+                특히 사용자가 미충족한 항목에 대한 구체적인 조항을 찾아서 탈락 사유를 설명하고,
+                '특별공급', '우선공급' 등 예외적으로 지원 가능한 다른 전형이 있는지 찾아서 대안을 제시해줘.
+                """;
+        }
+
+        String filterExpression = "notice_id == " + announcement.getId();
+
+        return chatClient.prompt()
+                .advisors(ragAdvisor)
+                .advisors(a -> a.param(VectorStoreDocumentRetriever.FILTER_EXPRESSION, filterExpression))
+                .advisors(AdvisorParams.ENABLE_NATIVE_STRUCTURED_OUTPUT)
+                .system(s -> s.text(systemPromptResource)
+                        .param("userProfile", userProfileStr)
+                        .param("analysisResult", analysisResultStr))
+                .user(userPrompt)
+                .call()
+                .entity(AiConsulting.class);
+    }
+
+    private String formatUserProfile(CreateReportRequest u) {
+        return String.format("""
+            - 나이: 만 %d세
+            - 거주지: %s (거주기간: %d년)
+            - 가구원수: %d명 (미성년 자녀: %d명)
+            - 무주택세대주: %s
+            - 혼인여부: %s (한부모: %s)
+            - 월소득: %,d원
+            - 총자산: %,d원 (자동차: %,d원)
+            - 청약통장: %s (납입: %d회)
+            - 기타: %s, 장애인(%s), 중증(%s), 우선공급대상(%s)
+            """,
+            u.getAge(), u.getResidenceArea(), u.getResidencePeriod(),
+            u.getHouseholdMembers(), u.getMinorChildren(),
+            u.getIsHomelessHouseholder() ? "예" : "아니오",
+            u.getIsMarried() ? "기혼" : "미혼", u.getIsSingleParent() ? "예" : "아니오",
+            u.getMonthlyIncome(), u.getTotalAssets(), u.getCarValue(),
+            u.getHasSavingsAccount() ? "보유" : "미보유", u.getPaymentCount(),
+            u.getAdditionalQualifications(), u.getIsDisabled() ? "예" : "아니오", 
+            u.getIsSeverelyDisabled() ? "예" : "아니오", u.getIsPrioritySupply() ? "예" : "아니오"
+        );
+    }
+
+    private void saveUserDetailInfo(Long userId, CreateReportRequest request) {
+        UserDetailInfo userDetailInfo = userDetailInfoRepository.findByUserId(userId)
+                .orElseGet(() -> UserDetailInfo.builder().userId(userId).build());
+
+        userDetailInfo.update(
+                request.getAge(),
+                request.getResidenceArea(),
+                request.getResidencePeriod(),
+                request.getHouseholdMembers(),
+                request.getMinorChildren(),
+                request.getIsHomelessHouseholder(),
+                request.getIsSingleParent(),
+                request.getIsMarried(),
+                request.getMonthlyIncome(),
+                request.getTotalAssets(),
+                request.getCarValue(),
+                request.getHasSavingsAccount(),
+                request.getPaymentCount(),
+                request.getAdditionalQualifications(),
+                request.getIsDisabled(),
+                request.getIsSeverelyDisabled(),
+                request.getIsPrioritySupply()
+        );
 
         userDetailInfoRepository.save(userDetailInfo);
     }
@@ -213,7 +286,7 @@ public class ReportService {
         AnnouncementCriteria.AssetLimitRule assetRule = criteria.getAssetLimits().stream()
                 .filter(r -> r.childCount() == childCount)
                 .findFirst()
-                .orElse(new AnnouncementCriteria.AssetLimitRule(0, 255000000L, 37080000L)); // Fallback
+                .orElse(new AnnouncementCriteria.AssetLimitRule(0, 255000000L, 37080000L));
 
         boolean assetPassed = user.getTotalAssets() <= assetRule.assetLimit();
         details.add(new DetailItem("총자산", assetPassed, String.format("%,d원", user.getTotalAssets()),
@@ -222,7 +295,7 @@ public class ReportService {
 
         // 소득 분석
         Long benchmark = criteria.getIncomeBenchmark().getOrDefault(Math.min(user.getHouseholdMembers(), 8), 7000000L);
-        long incomeLimit = (long) (benchmark * 0.7); // 일반 70% 가정
+        long incomeLimit = (long) (benchmark * 0.7);
         boolean incomePassed = user.getMonthlyIncome() <= incomeLimit;
         details.add(new DetailItem("월소득", incomePassed, String.format("%,d원", user.getMonthlyIncome()),
                 String.format("%,d원 이하", incomeLimit),
@@ -238,34 +311,6 @@ public class ReportService {
         if (user.getHouseholdMembers() >= 4) score += 30;
         if (user.getPaymentCount() >= 120) score += 10;
         return score;
-    }
-
-    /**
-     * LLM을 사용한 정성적 조언 생성 (RAG 적용)
-     */
-    private AiConsulting generateAiConsulting(CreateReportRequest user, Announcement announcement, String status, List<DetailItem> details) {
-        String detailContext = details.stream()
-                .map(d -> String.format("- %s: %s (%s)", d.category(), d.passed() ? "충족" : "미충족", d.message()))
-                .collect(Collectors.joining("\n"));
-
-        String prompt = status.equals("PASS")
-                ? "사용자는 이 청약에 적합(PASS)합니다. 공고문의 내용을 바탕으로 당첨 가능성을 높이는 전략과 당첨 후 입주까지의 자금 계획, 서류 준비 등 로드맵을 조언해주세요."
-                : "사용자는 이 청약에 부적합(FAIL)합니다. 미충족된 항목을 중심으로 탈락 사유를 설명하고, 공고문에서 언급된 다른 전형이나 예외 조항 등을 참고하여 해결책을 제시해주세요.";
-
-        // RAG 필터: 해당 공고 ID에 해당하는 문서만 검색
-        String filterExpression = "notice_id == " + announcement.getId();
-
-        return chatClient.prompt()
-                .advisors(ragAdvisor) // RAG 적용
-                .advisors(a -> a.param(VectorStoreDocumentRetriever.FILTER_EXPRESSION, filterExpression))
-                .advisors(AdvisorParams.ENABLE_NATIVE_STRUCTURED_OUTPUT) // JSON 출력 보장
-                .user(u -> u.text("공고명: {title}\n판정 결과: {status}\n상세 내역:\n{details}\n\n{instruction}")
-                        .param("title", announcement.getHouseNm())
-                        .param("status", status)
-                        .param("details", detailContext)
-                        .param("instruction", prompt))
-                .call()
-                .entity(AiConsulting.class);
     }
 
     private AnnouncementListResponse.AnnouncementItem convertToAnnouncementItem(Announcement announcement) {
@@ -297,9 +342,8 @@ public class ReportService {
     private Long getCurrentUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) {
-            return 1L; // 임시 반환
+            return 1L; 
         }
-        // TODO: JWT에서 userId 추출
         return 1L;
     }
 }
