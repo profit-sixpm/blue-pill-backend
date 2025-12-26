@@ -65,6 +65,13 @@ dependencies {
     compileOnly("org.projectlombok:lombok")
     annotationProcessor("org.projectlombok:lombok")
 
+    // AWS S3
+    implementation("io.awspring.cloud:spring-cloud-aws-starter-s3:3.1.1")
+
+    // WebClient for external API calls
+    implementation("org.springframework.boot:spring-boot-starter-webflux")
+    annotationProcessor("org.projectlombok:lombok")
+
 }
 dependencyManagement {
 	imports {

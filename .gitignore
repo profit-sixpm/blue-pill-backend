@@ -41,3 +41,11 @@ out/
 
 ### Claude Code
 settings.local.json
+
+### Environment Variables ###
+.env
+set-env.sh
+run.sh
+setup-env-mac.sh
+setup-env-linux.sh
+remove-env.sh

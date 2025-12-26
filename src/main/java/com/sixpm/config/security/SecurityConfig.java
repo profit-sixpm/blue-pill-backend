@@ -45,6 +45,7 @@ public class SecurityConfig {
 	// API 엔드포인트 상수
 	private static final String AUTH_API_PATTERN = "/api/v1/auth/**";
 	private static final String MEETING_AUTH_PATTERN = "/api/v1/meetings/*/auth/**";
+	private static final String ADMIN_API_PATTERN = "/api/admin/**";  // Admin API endpoints
 
 	// Public endpoints (인증 불필요)
 	private static final String SWAGGER_UI_PATTERN = "/swagger-ui/**";
@@ -73,6 +74,8 @@ public class SecurityConfig {
 				// Auth endpoints
 				.requestMatchers(AUTH_API_PATTERN).permitAll()
 				.requestMatchers(MEETING_AUTH_PATTERN).permitAll() // Anonymous login
+
+				.requestMatchers(ADMIN_API_PATTERN).permitAll()
 
 				.anyRequest().authenticated()
 			);
