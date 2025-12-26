@@ -5,9 +5,9 @@ services:
     image: postgres:16-alpine
     container_name: cheongyak-postgres
     environment:
-      - POSTGRES_DB=defaultdb
-      - POSTGRES_USER=avnadmin
-      - POSTGRES_PASSWORD=AVNS_qea3qmApIoWj0xVgoFg
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - TZ=Asia/Seoul
     ports:
       - "5432:5432"
@@ -15,7 +15,7 @@ services:
       - postgres-data:/var/lib/postgresql/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U avnadmin -d defaultdb"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-avnadmin} -d ${POSTGRES_DB:-defaultdb}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -30,9 +30,9 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=prod
       - TZ=Asia/Seoul
-      - DB_URL=jdbc:postgresql://postgres:5432/defaultdb
-      - DB_USERNAME=avnadmin
-      - DB_PASSWORD=AVNS_qea3qmApIoWj0xVgoFg
+      - DB_URL=${DB_URL}
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_CHAT_MODEL=${OPENAI_CHAT_MODEL}
       - OPENAI_BASE_URL=${OPENAI_BASE_URL}

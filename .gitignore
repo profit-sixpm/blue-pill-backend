@@ -44,6 +44,8 @@ settings.local.json
 
 ### Environment Variables ###
 .env
+.env.docker
+!.env.example
 set-env.sh
 run.sh
 setup-env-mac.sh
