@@ -39,14 +39,12 @@ public class JwtTokenProvider {
      * JWT 토큰 생성
      */
     public String createToken(String username, Long userId) {
-        Claims claims = Jwts.claims().subject(username).build();
-        claims.put("userId", userId);
-
         Date now = new Date();
         Date validity = new Date(now.getTime() + expiration);
 
         return Jwts.builder()
-                .claims(claims)
+                .subject(username)
+                .claim("userId", userId)
                 .issuedAt(now)
                 .expiration(validity)
                 .signWith(secretKey, Jwts.SIG.HS256)

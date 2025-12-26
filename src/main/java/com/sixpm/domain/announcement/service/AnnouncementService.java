@@ -146,13 +146,16 @@ public class AnnouncementService {
 
             // 3. 날짜 정보 추출 및 PDF URL
             String pdfUrl = null;
-            String rceptBgnde = date;  // 접수시작일 = 공고게시일 (fetch 요청 날짜)
-            String rceptEndde = null;  // 접수종료일
 
-            // CLSG_DT(공고마감일)을 접수종료일로 사용
-            String clsgDt = item.getClsgDt();  // 공고마감일 (YYYY.MM.DD 형식)
+            // PAN_DT: 공고게시일 (YYYYMMDD 형식)
+            String rcritPblancDe = item.getPanDt();  // "20251224"
+            String rceptBgnde = item.getPanDt();     // 접수시작일 = 공고게시일
+            String rceptEndde = null;                // 접수종료일
+
+            // CLSG_DT: 공고마감일 (YYYY.MM.DD 형식) -> 접수종료일로 사용
+            String clsgDt = item.getClsgDt();  // "2026.01.07"
             if (clsgDt != null && !clsgDt.trim().isEmpty()) {
-                rceptEndde = clsgDt.replaceAll("[.\\-\\s]", "");  // "2026.01.02" -> "20260102"
+                rceptEndde = clsgDt.replaceAll("[.\\-\\s]", "");  // "2026.01.07" -> "20260107"
             }
 
             // 상세조회: PDF URL만 가져오기
@@ -168,10 +171,7 @@ public class AnnouncementService {
             }
 
             log.info("Final dates for {}: rcritPblancDe={}, rceptBgnde={}, rceptEndde={}",
-                    item.getPanId(), date, rceptBgnde, rceptEndde);
-
-            log.info("Final reception dates for {}: rceptBgnde={}, rceptEndde={}",
-                    item.getPanId(), rceptBgnde, rceptEndde);
+                    item.getPanId(), rcritPblancDe, rceptBgnde, rceptEndde);
 
             // 4. DB에 저장 (날짜 정보 포함)
             // 지역코드 자동 매핑 (CNP_CD가 없는 경우 지역명으로 매핑)
@@ -190,9 +190,9 @@ public class AnnouncementService {
                     .houseNm(item.getPanNm())                 // 공고명
                     .subscrptAreaCode(regionCode)             // 지역코드 (자동 매핑)
                     .subscrptAreaCodeNm(regionName)           // 지역명
-                    .rcritPblancDe(date)                      // 공고일자 (fetch 요청 날짜 = 공고게시일)
-                    .rceptBgnde(rceptBgnde)                   // 접수시작일 (공고게시일과 동일)
-                    .rceptEndde(rceptEndde)                   // 접수종료일 (공고마감일)
+                    .rcritPblancDe(rcritPblancDe)             // 공고일자 (PAN_DT)
+                    .rceptBgnde(rceptBgnde)                   // 접수시작일 (PAN_DT)
+                    .rceptEndde(rceptEndde)                   // 접수종료일 (CLSG_DT)
                     .pblancUrl(item.getDtlUrl())              // 상세 URL
                     .pdfFileUrl(pdfUrl)                       // AHFL_URL (PDF 다운로드 URL)
                     .fetchDate(date)                          // 수집일자
