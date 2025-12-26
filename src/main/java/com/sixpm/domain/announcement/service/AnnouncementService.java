@@ -1,15 +1,21 @@
 package com.sixpm.domain.announcement.service;
 
 import com.sixpm.domain.announcement.dto.request.AnnouncementFetchRequest;
-import com.sixpm.domain.announcement.dto.response.AnnouncementDetailApiResponse;
-import com.sixpm.domain.announcement.dto.response.AnnouncementFetchResponse;
-import com.sixpm.domain.announcement.dto.response.AnnouncementListApiResponse;
+import com.sixpm.domain.announcement.dto.request.AnnouncementListRequest;
+import com.sixpm.domain.announcement.dto.response.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 청약 공고 처리 서비스
@@ -194,6 +200,114 @@ public class AnnouncementService {
                 .status("FAILED")
                 .errorMessage(errorMessage)
                 .build();
+    }
+
+    /**
+     * 청약공고 리스트 조회 (페이징, 지역코드 필터링)
+     *
+     * @param request 조회 요청
+     * @return 공고 리스트 응답
+     */
+    public AnnouncementListResponse getAnnouncementList(AnnouncementListRequest request) {
+        log.info("Fetching announcement list - page: {}, size: {}, regionCode: {}",
+                request.getPage(), request.getSize(), request.getRegionCode());
+
+        // 정렬 기준 설정
+        Sort sort = createSort(request.getSortBy());
+        Pageable pageable = PageRequest.of(request.getPage(), request.getSize(), sort);
+
+        // 페이징 조회
+        Page<com.sixpm.domain.announcement.entity.Announcement> page;
+        if (request.getRegionCode() != null && !request.getRegionCode().isEmpty()) {
+            // 지역코드로 필터링
+            page = announcementRepository.findBySubscrptAreaCode(request.getRegionCode(), pageable);
+        } else {
+            // 전체 조회
+            page = announcementRepository.findAll(pageable);
+        }
+
+        // Entity -> DTO 변환
+        List<AnnouncementListResponse.AnnouncementItem> items = page.getContent().stream()
+                .map(this::convertToAnnouncementItem)
+                .collect(Collectors.toList());
+
+        // 페이지 정보 생성
+        AnnouncementListResponse.PageInfo pageInfo = AnnouncementListResponse.PageInfo.builder()
+                .currentPage(page.getNumber())
+                .pageSize(page.getSize())
+                .totalElements(page.getTotalElements())
+                .totalPages(page.getTotalPages())
+                .first(page.isFirst())
+                .last(page.isLast())
+                .build();
+
+        log.info("Found {} announcements (total: {})", items.size(), page.getTotalElements());
+
+        return AnnouncementListResponse.builder()
+                .announcements(items)
+                .pageInfo(pageInfo)
+                .build();
+    }
+
+    /**
+     * Entity를 DTO로 변환
+     */
+    private AnnouncementListResponse.AnnouncementItem convertToAnnouncementItem(
+            com.sixpm.domain.announcement.entity.Announcement announcement) {
+
+        return AnnouncementListResponse.AnnouncementItem.builder()
+                .id(announcement.getId())
+                .announcementName(announcement.getHouseNm())
+                .announcementDate(announcement.getRceptBgnde())  // 공고일
+                .receptionStartDate(announcement.getRceptBgnde())  // 접수 시작일
+                .receptionEndDate(announcement.getRceptEndde())    // 접수 종료일
+                .receptionStatus(determineReceptionStatus(announcement))  // 접수 상태
+                .regionCode(announcement.getSubscrptAreaCode())
+                .regionName(announcement.getSubscrptAreaCodeNm())
+                .pdfUrl(announcement.getPdfFileUrl())
+                .createdAt(announcement.getCreatedAt())
+                .build();
+    }
+
+    /**
+     * 접수 상태 판단
+     */
+    private String determineReceptionStatus(com.sixpm.domain.announcement.entity.Announcement announcement) {
+        String today = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+
+        String startDate = announcement.getRceptBgnde();
+        String endDate = announcement.getRceptEndde();
+
+        // 날짜가 없는 경우
+        if (startDate == null || endDate == null) {
+            return "공고중";
+        }
+
+        // 접수 시작 전
+        if (today.compareTo(startDate) < 0) {
+            return "공고중";
+        }
+
+        // 접수 기간 중
+        if (today.compareTo(startDate) >= 0 && today.compareTo(endDate) <= 0) {
+            return "접수중";
+        }
+
+        // 접수 마감
+        return "접수마감";
+    }
+
+    /**
+     * 정렬 기준 생성
+     */
+    private Sort createSort(String sortBy) {
+        if ("RECEPTION".equalsIgnoreCase(sortBy)) {
+            // 접수일순 (접수 시작일 기준)
+            return Sort.by(Sort.Direction.DESC, "rceptBgnde")
+                    .and(Sort.by(Sort.Direction.DESC, "createdAt"));
+        }
+        // 기본: 최신순 (생성일 기준)
+        return Sort.by(Sort.Direction.DESC, "createdAt");
     }
 }
 

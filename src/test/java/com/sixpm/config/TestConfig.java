@@ -21,11 +21,6 @@ public class TestConfig {
     }
 
     @Bean
-    public WebClient.Builder webClientBuilder() {
-        return WebClient.builder();
-    }
-
-    @Bean
     public AwsCredentialsProvider awsCredentialsProvider() {
         // 테스트 환경에서는 더미 credentials 사용
         return StaticCredentialsProvider.create(
