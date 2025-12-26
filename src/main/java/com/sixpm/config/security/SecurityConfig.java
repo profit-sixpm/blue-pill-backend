@@ -32,6 +32,7 @@ public class SecurityConfig {
 	private static final List<String> ALLOWED_ORIGINS = Arrays.asList(
 		"http://localhost:3000",
 		"https://localhost:3000",
+		"http://blue-pill.me",
 		"https://blue-pill.me",
 		"https://www.blue-pill.me"
 	);

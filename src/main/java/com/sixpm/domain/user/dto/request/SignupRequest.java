@@ -1,25 +1,24 @@
 package com.sixpm.domain.user.dto.request;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Getter
-@NoArgsConstructor
+@Setter
+@Schema(description = "회원가입 요청")
 public class SignupRequest {
 
-    @NotBlank(message = "아이디를 입력해주세요")
-    @Size(min = 3, max = 50, message = "아이디는 3자 이상 50자 이하여야 합니다")
+    @NotBlank(message = "사용자 아이디는 필수입니다")
+    @Size(min = 4, max = 50, message = "사용자 아이디는 4~50자여야 합니다")
+    @Schema(description = "사용자 아이디", example = "testuser", required = true)
     private String username;
 
-    @NotBlank(message = "비밀번호를 입력해주세요")
-    @Size(min = 4, message = "비밀번호는 4자 이상이어야 합니다")
+    @NotBlank(message = "비밀번호는 필수입니다")
+    @Size(min = 6, max = 100, message = "비밀번호는 6자 이상이어야 합니다")
+    @Schema(description = "비밀번호", example = "password123", required = true)
     private String password;
-
-    public SignupRequest(String username, String password) {
-        this.username = username;
-        this.password = password;
-    }
 }
 
