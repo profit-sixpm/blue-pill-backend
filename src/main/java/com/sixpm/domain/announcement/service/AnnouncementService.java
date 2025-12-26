@@ -3,6 +3,7 @@ package com.sixpm.domain.announcement.service;
 import com.sixpm.domain.announcement.dto.request.AnnouncementFetchRequest;
 import com.sixpm.domain.announcement.dto.request.AnnouncementListRequest;
 import com.sixpm.domain.announcement.dto.response.*;
+import com.sixpm.domain.announcement.util.RegionCodeMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -143,8 +144,18 @@ public class AnnouncementService {
                             item.getUppAisTpCd()       // UPP_AIS_TP_CD (상위매물유형코드)
                     );
 
-            // 3. AHFL_URL 추출 (PDF 다운로드 URL)
+            // 3. 날짜 정보 추출 및 PDF URL
             String pdfUrl = null;
+            String rceptBgnde = date;  // 접수시작일 = 공고게시일 (fetch 요청 날짜)
+            String rceptEndde = null;  // 접수종료일
+
+            // CLSG_DT(공고마감일)을 접수종료일로 사용
+            String clsgDt = item.getClsgDt();  // 공고마감일 (YYYY.MM.DD 형식)
+            if (clsgDt != null && !clsgDt.trim().isEmpty()) {
+                rceptEndde = clsgDt.replaceAll("[.\\-\\s]", "");  // "2026.01.02" -> "20260102"
+            }
+
+            // 상세조회: PDF URL만 가져오기
             if (detailResponse != null && detailResponse.isSuccess()) {
                 pdfUrl = detailResponse.getPdfUrl();
                 if (pdfUrl != null && !pdfUrl.isEmpty()) {
@@ -156,13 +167,32 @@ public class AnnouncementService {
                 log.warn("Detail API failed for {}", item.getPanId());
             }
 
-            // 4. DB에 저장 (AHFL_URL 포함)
+            log.info("Final dates for {}: rcritPblancDe={}, rceptBgnde={}, rceptEndde={}",
+                    item.getPanId(), date, rceptBgnde, rceptEndde);
+
+            log.info("Final reception dates for {}: rceptBgnde={}, rceptEndde={}",
+                    item.getPanId(), rceptBgnde, rceptEndde);
+
+            // 4. DB에 저장 (날짜 정보 포함)
+            // 지역코드 자동 매핑 (CNP_CD가 없는 경우 지역명으로 매핑)
+            String regionCode = item.getCnpCd();
+            String regionName = item.getCnpCdNm();
+
+            if ((regionCode == null || regionCode.trim().isEmpty()) && regionName != null) {
+                regionCode = RegionCodeMapper.getRegionCode(regionName);
+                log.info("Auto-mapped region code for {}: {} -> {}",
+                        item.getPanId(), regionName, regionCode);
+            }
+
             com.sixpm.domain.announcement.entity.Announcement announcement = com.sixpm.domain.announcement.entity.Announcement.builder()
                     .houseManageNo(item.getPanId())           // 공고ID
                     .pblancNo(item.getPanNm())                // 공고명
                     .houseNm(item.getPanNm())                 // 공고명
-                    .subscrptAreaCode(item.getCnpCd())        // 지역코드
-                    .subscrptAreaCodeNm(item.getCnpCdNm())    // 지역명
+                    .subscrptAreaCode(regionCode)             // 지역코드 (자동 매핑)
+                    .subscrptAreaCodeNm(regionName)           // 지역명
+                    .rcritPblancDe(date)                      // 공고일자 (fetch 요청 날짜 = 공고게시일)
+                    .rceptBgnde(rceptBgnde)                   // 접수시작일 (공고게시일과 동일)
+                    .rceptEndde(rceptEndde)                   // 접수종료일 (공고마감일)
                     .pblancUrl(item.getDtlUrl())              // 상세 URL
                     .pdfFileUrl(pdfUrl)                       // AHFL_URL (PDF 다운로드 URL)
                     .fetchDate(date)                          // 수집일자
@@ -258,7 +288,7 @@ public class AnnouncementService {
         return AnnouncementListResponse.AnnouncementItem.builder()
                 .id(announcement.getId())
                 .announcementName(announcement.getHouseNm())
-                .announcementDate(announcement.getRceptBgnde())  // 공고일
+                .announcementDate(announcement.getRcritPblancDe())  // 모집공고일
                 .receptionStartDate(announcement.getRceptBgnde())  // 접수 시작일
                 .receptionEndDate(announcement.getRceptEndde())    // 접수 종료일
                 .receptionStatus(determineReceptionStatus(announcement))  // 접수 상태
