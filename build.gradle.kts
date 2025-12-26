@@ -32,7 +32,8 @@ dependencies {
 
 	// Spring AI
 	implementation("org.springframework.ai:spring-ai-starter-vector-store-pgvector")
-	implementation("org.springframework.ai:spring-ai-openai")
+	implementation("org.springframework.ai:spring-ai-pdf-document-reader")
+	implementation("org.springframework.ai:spring-ai-starter-model-openai")
 
 	// Database
 	runtimeOnly("com.h2database:h2")
@@ -62,6 +63,7 @@ dependencies {
     testImplementation("org.springframework.security:spring-security-test")
 
     compileOnly("org.projectlombok:lombok")
+    annotationProcessor("org.projectlombok:lombok")
 
 }
 dependencyManagement {
