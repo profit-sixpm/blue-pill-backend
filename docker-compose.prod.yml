@@ -18,6 +18,8 @@ services:
       - UPSTAGE_API_KEY=${UPSTAGE_API_KEY}
       - LH_API_SERVICE_KEY=${LH_API_SERVICE_KEY}
     restart: unless-stopped
+    depends_on:
+      - postgresql
     logging:
       driver: "json-file"
       options:
@@ -25,6 +27,7 @@ services:
         max-file: "3"
     networks:
       - cheongyak-network
+  
   postgresql:
     image: pgvector/pgvector:pg16
     container_name: cheongyak-postgresql
@@ -37,7 +40,12 @@ services:
     restart: unless-stopped
     networks:
       - cheongyak-network
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
 
 networks:
   cheongyak-network:
     driver: bridge
+
+volumes:
+  postgres_data:
