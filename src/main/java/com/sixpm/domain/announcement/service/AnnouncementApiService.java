@@ -49,6 +49,7 @@ public class AnnouncementApiService {
                             .queryParam("PG_SZ", perPage)  // 한 페이지 결과 수
                             .queryParam("PAGE", page)       // 페이지 번호
                             .queryParam("PAN_NT_ST_DT", date)  // 공고게시일
+                            .queryParam("UPP_AIS_TP_CD", "05")  // 공고유형코드 (05: 분양주택)
                             .build())
                     .retrieve()
                     .bodyToMono(new ParameterizedTypeReference<List<AnnouncementListApiResponse>>() {})
