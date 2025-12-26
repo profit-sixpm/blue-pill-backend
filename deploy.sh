@@ -17,7 +17,7 @@ docker-compose -f docker-compose.prod.yml down
 
 # 최신 이미지 pull
 echo "🔄 Pulling latest image..."
-docker pull wlsdn2165/cheongyak-be:latest
+docker pull wlsdn2165/6pm-be:latest
 
 # 컨테이너 시작
 echo "▶️  Starting containers..."
