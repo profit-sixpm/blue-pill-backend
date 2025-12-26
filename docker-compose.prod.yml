@@ -2,13 +2,21 @@ version: '3.8'
 
 services:
   backend:
-    image: wlsdn2165/cheongyak-be:latest
+    image: ${DOCKER_IMAGE}
     container_name: cheongyak-backend
     ports:
       - "8080:8080"
     environment:
       - SPRING_PROFILES_ACTIVE=prod
       - TZ=Asia/Seoul
+      - DB_URL=${DB_URL}
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_CHAT_MODEL=${OPENAI_CHAT_MODEL}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL}
+      - UPSTAGE_API_KEY=${UPSTAGE_API_KEY}
+      - LH_API_SERVICE_KEY=${LH_API_SERVICE_KEY}
     restart: unless-stopped
     logging:
       driver: "json-file"
@@ -17,8 +25,19 @@ services:
         max-file: "3"
     networks:
       - cheongyak-network
+  postgresql:
+    image: pgvector/pgvector:pg16
+    container_name: cheongyak-postgresql
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=defaultdb
+      - POSTGRES_USER=${DB_USERNAME}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    restart: unless-stopped
+    networks:
+      - cheongyak-network
 
 networks:
   cheongyak-network:
     driver: bridge
-
