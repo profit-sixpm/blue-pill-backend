@@ -20,7 +20,7 @@ import java.util.List;
 public class AnnouncementService {
 
     private final AnnouncementApiService announcementApiService;
-    private final S3Service s3Service;
+    private final com.sixpm.domain.announcement.repository.AnnouncementRepository announcementRepository;
 
     /**
      * 특정 날짜의 청약 공고를 조회하고 PDF를 S3에 업로드
@@ -114,8 +114,7 @@ public class AnnouncementService {
     }
 
     /**
-     * 개별 LH 공고 처리: 상세조회 → PDF 다운로드 → DB 저장
-     * LH API 상세조회를 통해 첨부파일(PDF) URL을 가져옴
+     * 개별 LH 공고 처리: 상세조회 → AHFL_URL 추출 → DB 저장
      */
     private AnnouncementFetchResponse.ProcessedAnnouncement processAnnouncement(
             AnnouncementListApiResponse.AnnouncementItem item, String date) {
@@ -123,37 +122,51 @@ public class AnnouncementService {
         log.info("Processing LH announcement: {} - {}", item.getPanId(), item.getPanNm());
 
         try {
-            // 1. 상세조회 API 호출하여 첨부파일 정보 가져오기
+            // 1. 이미 저장된 공고인지 확인 (중복 방지)
+            if (announcementRepository.existsByHouseManageNoAndPblancNo(item.getPanId(), item.getPanNm())) {
+                log.info("Announcement already exists: {} - {}", item.getPanId(), item.getPanNm());
+                return buildSuccessResponse(item, "Already exists (skipped)");
+            }
+
+            // 2. 상세조회 API 호출하여 첨부파일 정보 가져오기
             AnnouncementDetailApiResponse detailResponse = announcementApiService
                     .getAnnouncementDetail(
                             item.getPanId(),           // PAN_ID
                             item.getSplInfTpCd(),      // SPL_INF_TP_CD (공급정보구분코드)
-                            "02",                       // CCR_CNNT_SYS_DS_CD (고객센터연계시스템구분코드)
+                            item.getCcrCnntSysDsCd(),  // CCR_CNNT_SYS_DS_CD (고객센터연계시스템구분코드)
                             item.getUppAisTpCd()       // UPP_AIS_TP_CD (상위매물유형코드)
                     );
 
-            if (detailResponse == null || !detailResponse.isSuccess()) {
-                log.warn("LH detail API failed for PAN_ID: {}", item.getPanId());
-                return buildFailedResponse(item, "상세 정보 조회 실패");
+            // 3. AHFL_URL 추출 (PDF 다운로드 URL)
+            String pdfUrl = null;
+            if (detailResponse != null && detailResponse.isSuccess()) {
+                pdfUrl = detailResponse.getPdfUrl();
+                if (pdfUrl != null && !pdfUrl.isEmpty()) {
+                    log.info("PDF URL found for {}: {}", item.getPanId(), pdfUrl);
+                } else {
+                    log.warn("No PDF URL found for {}", item.getPanId());
+                }
+            } else {
+                log.warn("Detail API failed for {}", item.getPanId());
             }
 
-            // 2. PDF URL 추출
-            String pdfUrl = detailResponse.getPdfUrl();
+            // 4. DB에 저장 (AHFL_URL 포함)
+            com.sixpm.domain.announcement.entity.Announcement announcement = com.sixpm.domain.announcement.entity.Announcement.builder()
+                    .houseManageNo(item.getPanId())           // 공고ID
+                    .pblancNo(item.getPanNm())                // 공고명
+                    .houseNm(item.getPanNm())                 // 공고명
+                    .subscrptAreaCode(item.getCnpCd())        // 지역코드
+                    .subscrptAreaCodeNm(item.getCnpCdNm())    // 지역명
+                    .pblancUrl(item.getDtlUrl())              // 상세 URL
+                    .pdfFileUrl(pdfUrl)                       // AHFL_URL (PDF 다운로드 URL)
+                    .fetchDate(date)                          // 수집일자
+                    .build();
 
-            if (pdfUrl == null || pdfUrl.isEmpty()) {
-                log.warn("No PDF URL found for LH announcement: {}", item.getPanId());
-                // PDF가 없어도 DTL_URL은 저장
-                return buildSuccessResponse(item, item.getDtlUrl());
-            }
+            com.sixpm.domain.announcement.entity.Announcement saved = announcementRepository.save(announcement);
+            log.info("Saved announcement to DB: ID={}, PAN_ID={}, PDF_URL={}",
+                    saved.getId(), saved.getHouseManageNo(), saved.getPdfFileUrl());
 
-            // 3. TODO: PDF 다운로드 및 S3 업로드 (추후 구현)
-            // byte[] pdfBytes = announcementApiService.downloadPdf(pdfUrl);
-            // String s3Url = s3Service.uploadPdf(pdfBytes, date, fileName);
-
-            // 현재는 PDF URL만 저장
-            log.info("LH announcement processed - PDF URL: {}", pdfUrl);
-
-            return buildSuccessResponse(item, pdfUrl);
+            return buildSuccessResponse(item, pdfUrl != null ? pdfUrl : item.getDtlUrl());
 
         } catch (Exception e) {
             log.error("Failed to process LH announcement: {}", item.getPanId(), e);

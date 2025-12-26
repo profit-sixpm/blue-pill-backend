@@ -98,7 +98,10 @@ public class AnnouncementListApiResponse {
         private String dtlUrl;  // 공고상세 URL
 
         @JsonProperty("SPL_INF_TP_CD")
-        private String splInfTpCd;  // 특별정보유형코드
+        private String splInfTpCd;  // 공급정보구분코드
+
+        @JsonProperty("CCR_CNNT_SYS_DS_CD")
+        private String ccrCnntSysDsCd;  // 고객센터연계시스템구분코드
     }
 
     // 편의 메서드
