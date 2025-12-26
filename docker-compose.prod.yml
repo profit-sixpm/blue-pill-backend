@@ -23,7 +23,7 @@ services:
       - cheongyak-network
 
   backend:
-    image: wlsdn2165/cheongyak-be:latest
+    image: wlsdn2165/6pm-be:latest
     container_name: cheongyak-backend
     ports:
       - "8080:8080"
