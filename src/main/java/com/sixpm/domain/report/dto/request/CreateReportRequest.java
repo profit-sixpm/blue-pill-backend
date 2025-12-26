@@ -13,6 +13,10 @@ import lombok.Data;
 @Schema(description = "분석리포트 생성 요청")
 public class CreateReportRequest {
 
+    @NotNull(message = "공고 ID는 필수입니다")
+    @Schema(description = "공고 ID", example = "1")
+    private Long announcementId;
+
     @NotNull(message = "나이는 필수입니다")
     @Min(value = 19, message = "나이는 19세 이상이어야 합니다")
     @Schema(description = "나이", example = "30")
