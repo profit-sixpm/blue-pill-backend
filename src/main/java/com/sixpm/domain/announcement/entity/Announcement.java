@@ -21,10 +21,10 @@ public class Announcement {
     private Long id;
 
     // 기본 식별 정보
-    @Column(name = "house_manage_no", nullable = false, length = 50)
+    @Column(name = "house_manage_no", nullable = false, length = 100)
     private String houseManageNo;
 
-    @Column(name = "pblanc_no", nullable = false, length = 50)
+    @Column(name = "pblanc_no", nullable = false, length = 200)
     private String pblancNo;
 
     @Column(name = "model_no", length = 50)

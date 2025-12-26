@@ -40,7 +40,6 @@ public class AnnouncementApiService {
 
         try {
             // LH API는 배열 응답을 반환: [{"dsSch": [...]}, {"dsList": [...], "resHeader": [...]}]
-            // 두 번째 요소에 실제 데이터가 있음
             List<AnnouncementListApiResponse> responseList = webClient.get()
                     .uri(uriBuilder -> uriBuilder
                             .scheme("http")
@@ -112,6 +111,13 @@ public class AnnouncementApiService {
             AnnouncementDetailApiResponse response = null;
             if (responseList != null && responseList.size() > 1) {
                 response = responseList.get(1);  // 두 번째 요소!
+            }
+
+            if (response != null) {
+                log.info("Detail API response for {}: success={}, attachments={}",
+                        panId,
+                        response.isSuccess(),
+                        response.getAttachmentFiles() != null ? response.getAttachmentFiles().size() : 0);
             }
 
             log.info("Successfully fetched LH announcement detail");
