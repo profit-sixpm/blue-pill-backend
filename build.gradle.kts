@@ -1,8 +1,9 @@
 plugins {
 	java
-	id("org.springframework.boot") version "3.4.1"
+	id("org.springframework.boot") version "3.5.9"
 	id("io.spring.dependency-management") version "1.1.7"
 }
+val springAiVersion by extra("1.1.2")
 
 group = "com.sixpm"
 version = "0.0.1-SNAPSHOT"
@@ -28,6 +29,10 @@ dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-web")
 	implementation("org.springframework.boot:spring-boot-starter-data-jpa")
 	implementation("org.springframework.boot:spring-boot-starter-validation")
+
+	// Spring AI
+	implementation("org.springframework.ai:spring-ai-starter-vector-store-pgvector")
+	implementation("org.springframework.ai:spring-ai-openai")
 
 	// Database
 	runtimeOnly("com.h2database:h2")
@@ -58,6 +63,11 @@ dependencies {
 
     compileOnly("org.projectlombok:lombok")
 
+}
+dependencyManagement {
+	imports {
+		mavenBom("org.springframework.ai:spring-ai-bom:$springAiVersion")
+	}
 }
 
 tasks.withType<Test> {
