@@ -72,8 +72,9 @@ public class AnnouncementController {
     ) {
         log.info("GET /api/announcements/{}", id);
 
-        // TODO: 상세 조회 구현 필요
-        return ResponseEntity.ok(null);
+        AnnouncementListResponse.AnnouncementItem announcement = announcementService.getAnnouncementDetail(id);
+
+        return ResponseEntity.ok(announcement);
     }
 }
 

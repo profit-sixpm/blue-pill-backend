@@ -350,6 +350,22 @@ public class AnnouncementService {
     }
 
     /**
+     * 청약공고 상세 조회 (ID 기반)
+     *
+     * @param id 공고 ID
+     * @return 공고 상세 정보
+     */
+    public AnnouncementListResponse.AnnouncementItem getAnnouncementDetail(long id) {
+        log.info("Fetching announcement detail for id: {}", id);
+
+        com.sixpm.domain.announcement.entity.Announcement announcement = announcementRepository
+                .findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("공고를 찾을 수 없습니다. ID: " + id));
+
+        return convertToAnnouncementItem(announcement);
+    }
+
+    /**
      * 정렬 기준 생성
      */
     private Sort createSort(String sortBy) {
