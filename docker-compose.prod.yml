@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  backend:
+    image: wlsdn2165/cheongyak-be:latest
+    container_name: cheongyak-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - TZ=Asia/Seoul
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - cheongyak-network
+
+networks:
+  cheongyak-network:
+    driver: bridge
+
