@@ -1,10 +1,12 @@
 package com.sixpm.presentation.announcement.controller;
 
-import com.sixpm.domain.announcement.dto.request.AnnouncementFetchRequest;
+import com.sixpm.config.TestConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -17,6 +19,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
+@Import(TestConfig.class)
+@EnableAutoConfiguration(exclude = {
+	io.awspring.cloud.autoconfigure.s3.S3AutoConfiguration.class,
+	io.awspring.cloud.autoconfigure.core.CredentialsProviderAutoConfiguration.class,
+	io.awspring.cloud.autoconfigure.core.RegionProviderAutoConfiguration.class,
+	org.springframework.ai.autoconfigure.vectorstore.pgvector.PgVectorStoreAutoConfiguration.class
+})
 class AnnouncementAdminControllerTest {
 
     @Autowired

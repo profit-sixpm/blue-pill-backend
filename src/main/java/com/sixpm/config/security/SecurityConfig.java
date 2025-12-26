@@ -7,7 +7,10 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -23,10 +26,14 @@ import java.util.List;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
+	private final JwtTokenProvider jwtTokenProvider;
+
 	// CORS 설정 상수
 	private static final List<String> ALLOWED_ORIGINS = Arrays.asList(
 		"http://localhost:3000",
-		"https://localhost:3000"
+		"https://localhost:3000",
+		"https://blue-pill.me",
+		"https://www.blue-pill.me"
 	);
 
 	private static final List<String> ALLOWED_METHODS = Arrays.asList(
@@ -80,7 +87,16 @@ public class SecurityConfig {
 				.anyRequest().authenticated()
 			);
 
+		// JWT 필터 추가
+		JwtAuthenticationFilter jwtAuthenticationFilter = new JwtAuthenticationFilter(jwtTokenProvider);
+		http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+
 		return http.build();
+	}
+
+	@Bean
+	public PasswordEncoder passwordEncoder() {
+		return new BCryptPasswordEncoder();
 	}
 
 	@Bean
