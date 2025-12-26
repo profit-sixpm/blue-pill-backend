@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  blue-pill-backend:
+    image: blue-pill-backend:latest
+    container_name: blue-pill-backend
+    ports:
+      - "8080:8080"
+    environment:
+      # Database Configuration
+      - DB_URL=${DB_URL}
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+
+      # JWT Configuration
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRATION=${JWT_EXPIRATION}
+
+      # AWS Configuration
+      - AWS_REGION=${AWS_REGION}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_S3_BUCKET=${AWS_S3_BUCKET}
+
+      # OpenAI Configuration
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_CHAT_MODEL=${OPENAI_CHAT_MODEL}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL}
+
+      # Upstage API
+      - UPSTAGE_API_KEY=${UPSTAGE_API_KEY}
+
+      # LH API
+      - LH_API_SERVICE_KEY=${LH_API_SERVICE_KEY}
+
+      # Application Profile
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-prod}
+
+    restart: unless-stopped
+    networks:
+      - blue-pill-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  blue-pill-network:
+    driver: bridge
+

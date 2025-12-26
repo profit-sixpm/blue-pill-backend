@@ -5,8 +5,11 @@ import com.sixpm.domain.announcement.dto.response.AnnouncementListApiResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
+
+import java.util.List;
 
 /**
  * 청약 공고 Open API 호출 서비스
@@ -25,74 +28,97 @@ public class AnnouncementApiService {
     private String serviceKey;
 
     /**
-     * 청약 공고 리스트 조회
+     * LH 분양임대공고문 조회 (리스트)
      *
-     * @param date 공고일자 (YYYYMMDD)
+     * @param date 공고게시일 (YYYYMMDD)
      * @param page 페이지 번호
-     * @param perPage 페이지당 개수
+     * @param perPage 페이지당 개수 (PG_SZ)
      * @return 청약 공고 리스트
      */
     public AnnouncementListApiResponse getAnnouncementList(String date, int page, int perPage) {
-        log.info("Fetching announcement list for date: {}, page: {}, perPage: {}", date, page, perPage);
+        log.info("Fetching LH announcement list for date: {}, page: {}, perPage: {}", date, page, perPage);
 
         try {
-            AnnouncementListApiResponse response = webClient.get()
+            // LH API는 배열 응답을 반환: [{"dsSch": [...]}, {"dsList": [...], "resHeader": [...]}]
+            // 두 번째 요소에 실제 데이터가 있음
+            List<AnnouncementListApiResponse> responseList = webClient.get()
                     .uri(uriBuilder -> uriBuilder
-                            .scheme("https")
-                            .host("api.odcloud.kr")
-                            .path("/api/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancDetail")
-                            .queryParam("page", page)
-                            .queryParam("perPage", perPage)
+                            .scheme("http")
+                            .host("apis.data.go.kr")
+                            .path("/B552555/lhLeaseNoticeInfo1/lhLeaseNoticeInfo1")
                             .queryParam("serviceKey", serviceKey)
-                            .queryParam("RCRIT_PBLANC_DE", date)
+                            .queryParam("PG_SZ", perPage)  // 한 페이지 결과 수
+                            .queryParam("PAGE", page)       // 페이지 번호
+                            .queryParam("PAN_NT_ST_DT", date)  // 공고게시일
                             .build())
                     .retrieve()
-                    .bodyToMono(AnnouncementListApiResponse.class)
+                    .bodyToMono(new ParameterizedTypeReference<List<AnnouncementListApiResponse>>() {})
                     .block();
 
-            log.info("Successfully fetched announcement list. Total count: {}",
-                    response != null && response.getResponse() != null && response.getResponse().getBody() != null
-                            ? response.getResponse().getBody().getTotalCount() : 0);
+            // 두 번째 요소가 실제 데이터 (첫 번째는 dsSch만 있음)
+            AnnouncementListApiResponse response = null;
+            if (responseList != null && responseList.size() > 1) {
+                response = responseList.get(1);  // 두 번째 요소!
+            }
+
+            log.info("Successfully fetched LH announcement list. Total: {}",
+                    response != null ? response.getTotalCount() : 0);
 
             return response;
         } catch (Exception e) {
-            log.error("Error fetching announcement list for date: {}", date, e);
-            throw new RuntimeException("청약 공고 리스트 조회 실패: " + e.getMessage(), e);
+            log.error("Error fetching LH announcement list for date: {}", date, e);
+            throw new RuntimeException("LH 청약 공고 리스트 조회 실패: " + e.getMessage(), e);
         }
     }
 
     /**
-     * 청약 공고 상세 조회
+     * LH 분양임대공고별 상세정보 조회
      *
-     * @param houseManageNo 주택관리번호
-     * @param pblancNo 공고번호
+     * API: /B552555/lhLeaseNoticeDtlInfo1/getLeaseNoticeDtlInfo1
+     *
+     * @param panId 공고ID (PAN_ID)
+     * @param splInfTpCd 공급정보구분코드 (SPL_INF_TP_CD)
+     * @param ccrCnntSysDsCd 고객센터연계시스템구분코드 (CCR_CNNT_SYS_DS_CD)
+     * @param uppAisTpCd 상위매물유형코드 (UPP_AIS_TP_CD)
      * @return 청약 공고 상세
      */
-    public AnnouncementDetailApiResponse getAnnouncementDetail(String houseManageNo, String pblancNo) {
-        log.info("Fetching announcement detail for houseManageNo: {}, pblancNo: {}", houseManageNo, pblancNo);
+    public AnnouncementDetailApiResponse getAnnouncementDetail(
+            String panId,
+            String splInfTpCd,
+            String ccrCnntSysDsCd,
+            String uppAisTpCd) {
+
+        log.info("Fetching LH announcement detail for panId: {}, splInfTpCd: {}", panId, splInfTpCd);
 
         try {
-            AnnouncementDetailApiResponse response = webClient.get()
+            // LH API는 배열 응답을 반환: [{"dsSch": [...]}, {"dsAhflInfo": [...], "resHeader": [...], ...}]
+            // 두 번째 요소에 실제 데이터가 있음
+            List<AnnouncementDetailApiResponse> responseList = webClient.get()
                     .uri(uriBuilder -> uriBuilder
-                            .scheme("https")
-                            .host("api.odcloud.kr")
-                            .path("/api/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancMdl")
-                            .queryParam("page", 1)
-                            .queryParam("perPage", 100)
+                            .scheme("http")
+                            .host("apis.data.go.kr")
+                            .path("/B552555/lhLeaseNoticeDtlInfo1/getLeaseNoticeDtlInfo1")
                             .queryParam("serviceKey", serviceKey)
-                            .queryParam("HOUSE_MANAGE_NO", houseManageNo)
-                            .queryParam("PBLANC_NO", pblancNo)
+                            .queryParam("PAN_ID", panId)                      // 공고ID
+                            .queryParam("SPL_INF_TP_CD", splInfTpCd)          // 공급정보구분코드
+                            .queryParam("CCR_CNNT_SYS_DS_CD", ccrCnntSysDsCd) // 고객센터연계시스템구분코드
+                            .queryParam("UPP_AIS_TP_CD", uppAisTpCd)          // 상위매물유형코드
                             .build())
                     .retrieve()
-                    .bodyToMono(AnnouncementDetailApiResponse.class)
+                    .bodyToMono(new ParameterizedTypeReference<List<AnnouncementDetailApiResponse>>() {})
                     .block();
 
-            log.info("Successfully fetched announcement detail");
+            // 두 번째 요소가 실제 데이터
+            AnnouncementDetailApiResponse response = null;
+            if (responseList != null && responseList.size() > 1) {
+                response = responseList.get(1);  // 두 번째 요소!
+            }
+
+            log.info("Successfully fetched LH announcement detail");
             return response;
         } catch (Exception e) {
-            log.error("Error fetching announcement detail for houseManageNo: {}, pblancNo: {}",
-                    houseManageNo, pblancNo, e);
-            throw new RuntimeException("청약 공고 상세 조회 실패: " + e.getMessage(), e);
+            log.error("Error fetching LH announcement detail for panId: {}", panId, e);
+            throw new RuntimeException("LH 청약 공고 상세 조회 실패: " + e.getMessage(), e);
         }
     }
 

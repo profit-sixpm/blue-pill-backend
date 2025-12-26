@@ -1,154 +1,261 @@
 package com.sixpm.domain.announcement.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
 import java.util.List;
 
 /**
- * 청약 공고 상세 조회 API 응답
+ * LH 분양임대공고별 상세정보 조회 API 응답
+ * API: /B552555/lhLeaseNoticeDtlInfo1/getLeaseNoticeDtlInfo1
  */
 @Data
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class AnnouncementDetailApiResponse {
-    @JsonProperty("response")
-    private Response response;
+
+    @JsonProperty("dsSch")
+    private List<SearchCondition> searchConditions;
+
+    @JsonProperty("resHeader")
+    private List<ResponseHeader> responseHeaders;
+
+    // 접수처정보
+    @JsonProperty("dsCtrtPlc")
+    private List<ContractPlace> contractPlaces;
+
+    // 단지정보
+    @JsonProperty("dsSbd")
+    private List<ComplexInfo> complexInfos;
+
+    // 공급일정
+    @JsonProperty("dsSplScdl")
+    private List<SupplySchedule> supplySchedules;
+
+    // 첨부파일정보
+    @JsonProperty("dsAhflInfo")
+    private List<AttachmentFile> attachmentFiles;
+
+    // 단지별첨부파일정보
+    @JsonProperty("dsSbdAhfl")
+    private List<ComplexAttachment> complexAttachments;
+
+    // 기타정보
+    @JsonProperty("dsEtcInfo")
+    private List<EtcInfo> etcInfos;
 
     @Data
-    public static class Response {
-        @JsonProperty("header")
-        private Header header;
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class SearchCondition {
+        @JsonProperty("UPP_AIS_TP_CD")
+        private String uppAisTpCd;  // 상위매물유형코드
 
-        @JsonProperty("body")
-        private Body body;
+        @JsonProperty("AIS_TP_CD")
+        private String aisTpCd;  // 매물유형코드
+
+        @JsonProperty("SPL_INF_TP_CD")
+        private String splInfTpCd;  // 공급정보구분코드
+
+        @JsonProperty("PAN_ID")
+        private String panId;  // 공고ID
+
+        @JsonProperty("CCR_CNNT_SYS_DS_CD")
+        private String ccrCnntSysDsCd;  // 고객센터연계시스템구분코드
     }
 
     @Data
-    public static class Header {
-        @JsonProperty("resultCode")
-        private String resultCode;
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class ResponseHeader {
+        @JsonProperty("SS_CODE")
+        private String ssCode;  // 결과코드 (Y/N)
 
-        @JsonProperty("resultMsg")
-        private String resultMsg;
+        @JsonProperty("RS_DTTM")
+        private String rsDttm;  // 출력일시
     }
 
+    /**
+     * 접수처정보 (분양주택, 공공임대 등)
+     */
     @Data
-    public static class Body {
-        @JsonProperty("items")
-        private Items items;
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class ContractPlace {
+        @JsonProperty("CTRT_PLC_ADR")
+        private String ctrtPlcAdr;  // 접수처소재지주소
 
-        @JsonProperty("numOfRows")
-        private Integer numOfRows;
+        @JsonProperty("CTRT_PLC_DTL_ADR")
+        private String ctrtPlcDtlAdr;  // 접수처소재지상세주소
 
-        @JsonProperty("pageNo")
-        private Integer pageNo;
+        @JsonProperty("SIL_OFC_TLNO")
+        private String silOfcTlno;  // 전화번호
 
-        @JsonProperty("totalCount")
-        private Integer totalCount;
+        @JsonProperty("SIL_OFC_OPEN_DT")
+        private String silOfcOpenDt;  // 운영기간시작일시
+
+        @JsonProperty("SIL_OFC_BCLS_DT")
+        private String silOfcBclsDt;  // 운영기간종료일시
+
+        @JsonProperty("SIL_OFC_DT")
+        private String silOfcDt;  // 운영기간
+
+        @JsonProperty("TSK_SCD_CTS")
+        private String tskScdCts;  // 일정내용
+
+        @JsonProperty("SIL_OFC_GUD_FCTS")
+        private String silOfcGudFcts;  // 접수처안내사항
     }
 
+    /**
+     * 단지정보
+     */
     @Data
-    public static class Items {
-        @JsonProperty("item")
-        private List<AnnouncementDetailItem> item;
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class ComplexInfo {
+        @JsonProperty("BZDT_NM")
+        private String bzdtNm;  // 단지명
+
+        @JsonProperty("LCT_ARA_ADR")
+        private String lctAraAdr;  // 단지주소
+
+        @JsonProperty("LCT_ARA_DTL_ADR")
+        private String lctAraDtlAdr;  // 단지상세주소
+
+        @JsonProperty("MIN_MAX_RSDN_DDO_AR")
+        private String minMaxRsdnDdoAr;  // 전용면적
+
+        @JsonProperty("SUM_TOT_HSH_CNT")
+        private String sumTotHshCnt;  // 총세대수
+
+        @JsonProperty("HTN_FMLA_DS_CD_NM")
+        private String htnFmlaDsCdNm;  // 난방방식
+
+        @JsonProperty("MVIN_XPC_YM")
+        private String mvinXpcYm;  // 입주예정월
+
+        @JsonProperty("TFFC_FCL_CTS")
+        private String tffcFclCts;  // 교통여건
+
+        @JsonProperty("EDC_FCL_CTS")
+        private String edcFclCts;  // 교육환경
+
+        @JsonProperty("CVN_FCL_CTS")
+        private String cvnFclCts;  // 편의시설
+
+        @JsonProperty("IDT_FCL_CTS")
+        private String idtFclCts;  // 부대시설
+
+        @JsonProperty("SPL_INF_GUD_FCTS")
+        private String splInfGudFcts;  // 공급정보 안내사항
     }
 
+    /**
+     * 공급일정
+     */
     @Data
-    public static class AnnouncementDetailItem {
-        @JsonProperty("HOUSE_MANAGE_NO")
-        private String houseManageNo;  // 주택관리번호
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class SupplySchedule {
+        @JsonProperty("HS_SBSC_ACP_TRG_CD_NM")
+        private String hsSbscAcpTrgCdNm;  // 구분 (일반1순위, 일반2순위 등)
 
-        @JsonProperty("PBLANC_NO")
-        private String pblancNo;  // 공고번호
+        @JsonProperty("ACP_DTTM")
+        private String acpDttm;  // 신청일시
 
-        @JsonProperty("MODEL_NO")
-        private String modelNo;  // 모델번호
+        @JsonProperty("RMK")
+        private String rmk;  // 신청방법
 
-        @JsonProperty("HOUSE_NM")
-        private String houseNm;  // 주택명
+        @JsonProperty("PZWR_ANC_DT")
+        private String pzwrAncDt;  // 당첨자발표일자
 
-        @JsonProperty("HOUSE_SECD")
-        private String houseSecd;  // 주택구분코드
+        @JsonProperty("PZWR_PPR_SBM_ST_DT")
+        private String pzwrPprSbmStDt;  // 당첨자서류제출기간시작일
 
-        @JsonProperty("HOUSE_SECD_NM")
-        private String houseSecdNm;  // 주택구분명
+        @JsonProperty("PZWR_PPR_SBM_ED_DT")
+        private String pzwrPprSbmEdDt;  // 당첨자서류제출기간종료일
 
-        @JsonProperty("RENT_SECD")
-        private String rentSecd;  // 분양구분코드
+        @JsonProperty("CTRT_ST_DT")
+        private String ctrtStDt;  // 계약체결기간시작일
 
-        @JsonProperty("RENT_SECD_NM")
-        private String rentSecdNm;  // 분양구분명
+        @JsonProperty("CTRT_ED_DT")
+        private String ctrtEdDt;  // 계약체결기간종료일
 
-        @JsonProperty("SUBSCRPT_AREA_CODE")
-        private String subscrptAreaCode;  // 모집지역코드
+        @JsonProperty("SPL_SCD_GUD_FCTS")
+        private String splScdGudFcts;  // 공급일정안내사항
+    }
 
-        @JsonProperty("SUBSCRPT_AREA_CODE_NM")
-        private String subscrptAreaCodeNm;  // 모집지역명
+    /**
+     * 첨부파일정보
+     */
+    @Data
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class AttachmentFile {
+        @JsonProperty("SL_PAN_AHFL_DS_CD_NM")
+        private String slPanAhflDsCdNm;  // 파일구분명
 
-        @JsonProperty("HSSPLY_ZIP")
-        private String hssplyZip;  // 공급위치 우편번호
+        @JsonProperty("CMN_AHFL_NM")
+        private String cmnAhflNm;  // 첨부파일명
 
-        @JsonProperty("HSSPLY_ADRES")
-        private String hssplyAdres;  // 공급위치
+        @JsonProperty("AHFL_URL")
+        private String ahflUrl;  // 다운로드 URL
+    }
 
-        @JsonProperty("TOT_SUPLY_HSHLDCO")
-        private String totSuplyHshldco;  // 공급규모(세대수)
+    /**
+     * 단지별첨부파일정보
+     */
+    @Data
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class ComplexAttachment {
+        @JsonProperty("BZDT_NM")
+        private String bzdtNm;  // 단지명
 
-        @JsonProperty("RCRIT_PBLANC_DE")
-        private String rcritPblancDe;  // 모집공고일
+        @JsonProperty("SL_PAN_AHFL_DS_CD_NM")
+        private String slPanAhflDsCdNm;  // 파일구분명
 
-        @JsonProperty("RCEPT_BGNDE")
-        private String rceptBgnde;  // 접수시작일
+        @JsonProperty("CMN_AHFL_NM")
+        private String cmnAhflNm;  // 첨부파일명
 
-        @JsonProperty("RCEPT_ENDDE")
-        private String rceptEndde;  // 접수종료일
+        @JsonProperty("AHFL_URL")
+        private String ahflUrl;  // 다운로드 URL
+    }
 
-        @JsonProperty("SPSPLY_RCEPT_BGNDE")
-        private String spsplyRceptBgnde;  // 특별공급 접수시작일
+    /**
+     * 기타정보
+     */
+    @Data
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class EtcInfo {
+        @JsonProperty("PAN_DTL_CTS")
+        private String panDtlCts;  // 공고내용
 
-        @JsonProperty("SPSPLY_RCEPT_ENDDE")
-        private String spsplyRceptEndde;  // 특별공급 접수종료일
+        @JsonProperty("ETC_FCTS")
+        private String etcFcts;  // 기타사항
+    }
 
-        @JsonProperty("GNRL_RCEPT_BGNDE")
-        private String gnrlRceptBgnde;  // 일반공급 접수시작일
+    // 편의 메서드
+    public boolean isSuccess() {
+        if (responseHeaders == null || responseHeaders.isEmpty()) {
+            return false;
+        }
+        return "Y".equals(responseHeaders.get(0).getSsCode());
+    }
 
-        @JsonProperty("GNRL_RCEPT_ENDDE")
-        private String gnrlRceptEndde;  // 일반공급 접수종료일
+    /**
+     * 첨부파일 중 PDF 파일 URL 가져오기
+     */
+    public String getPdfUrl() {
+        if (attachmentFiles == null || attachmentFiles.isEmpty()) {
+            return null;
+        }
 
-        @JsonProperty("PRZWNER_PRESNATN_DE")
-        private String przwnerPresnatnDe;  // 당첨자발표일
+        // 공고문(PDF) 또는 공고문(hwp) 파일 찾기
+        for (AttachmentFile file : attachmentFiles) {
+            String fileType = file.getSlPanAhflDsCdNm();
+            if (fileType != null && (fileType.contains("공고문") || fileType.contains("PDF"))) {
+                return file.getAhflUrl();
+            }
+        }
 
-        @JsonProperty("CNTRCT_CNCLS_BGNDE")
-        private String cntrctCnclsBgnde;  // 계약시작일
-
-        @JsonProperty("CNTRCT_CNCLS_ENDDE")
-        private String cntrctCnclsEndde;  // 계약종료일
-
-        @JsonProperty("SPECLT_RDN_EARTH_AT")
-        private String specltRdnEarthAt;  // 투기과열지구여부
-
-        @JsonProperty("MDAT_TRGET_AREA_SECD")
-        private String mdatTrgetAreaSecd;  // 조정대상지역여부
-
-        @JsonProperty("PARCPRC_ULS_AT")
-        private String parcprcUlsAt;  // 분양가상한제여부
-
-        @JsonProperty("IMPRMN_BSNS_AT")
-        private String imprmnBsnsAt;  // 정비사업여부
-
-        @JsonProperty("PUBLIC_HOUSE_EARTH_AT")
-        private String publicHouseEarthAt;  // 공공택지여부
-
-        @JsonProperty("LRSCL_BLDLND_AT")
-        private String lrsclBldlndAt;  // 대규모택지개발지구여부
-
-        @JsonProperty("NPLN_PRVOPR_PUBLIC_HOUSE_AT")
-        private String nplnPrvoprPublicHouseAt;  // 수도권내민영공공택지여부
-
-        @JsonProperty("PBLANC_URL")
-        private String pblancUrl;  // 공고URL
-
-        @JsonProperty("BRHC_MVIN_XPC_YM")
-        private String brhcMvinXpcYm;  // 입주예정월
+        // 첫 번째 파일 반환
+        return attachmentFiles.get(0).getAhflUrl();
     }
 }
+
 

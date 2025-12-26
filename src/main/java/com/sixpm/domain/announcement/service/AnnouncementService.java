@@ -46,25 +46,22 @@ public class AnnouncementService {
                 AnnouncementListApiResponse listResponse = announcementApiService
                         .getAnnouncementList(request.getAnnouncementDate(), page, perPage);
 
-                if (listResponse == null
-                        || listResponse.getResponse() == null
-                        || listResponse.getResponse().getBody() == null
-                        || listResponse.getResponse().getBody().getItems() == null
-                        || listResponse.getResponse().getBody().getItems().getItem() == null) {
-                    log.warn("No announcements found for date: {}", request.getAnnouncementDate());
+                // LH API 응답 검증
+                if (listResponse == null || !listResponse.isSuccess()) {
+                    log.warn("No announcements found or API failed for date: {}", request.getAnnouncementDate());
                     break;
                 }
 
-                List<AnnouncementListApiResponse.AnnouncementItem> items =
-                        listResponse.getResponse().getBody().getItems().getItem();
+                List<AnnouncementListApiResponse.AnnouncementItem> items = listResponse.getItems();
 
-                if (items.isEmpty()) {
+                if (items == null || items.isEmpty()) {
+                    log.info("No more items found on page {}", page);
                     break;
                 }
 
                 log.info("Processing page {}, items count: {}", page, items.size());
 
-                // 2. 각 공고에 대해 상세 조회 및 PDF 다운로드/업로드
+                // 2. 각 공고에 대해 처리 (LH API는 DTL_URL만 제공)
                 for (AnnouncementListApiResponse.AnnouncementItem item : items) {
                     try {
                         processedCount++;
@@ -80,14 +77,14 @@ public class AnnouncementService {
                             failedCount++;
                         }
                     } catch (Exception e) {
-                        log.error("Error processing announcement: {} - {}",
-                                item.getHouseManageNo(), item.getPblancNo(), e);
+                        log.error("Error processing LH announcement: {} - {}",
+                                item.getPanId(), item.getPanNm(), e);
                         failedCount++;
 
                         processedList.add(AnnouncementFetchResponse.ProcessedAnnouncement.builder()
-                                .houseManageNo(item.getHouseManageNo())
-                                .pblancNo(item.getPblancNo())
-                                .houseNm(item.getHouseNm())
+                                .houseManageNo(item.getPanId())
+                                .pblancNo(item.getPanNm())
+                                .houseNm(item.getPanNm())
                                 .status("FAILED")
                                 .errorMessage(e.getMessage())
                                 .build());
@@ -95,7 +92,7 @@ public class AnnouncementService {
                 }
 
                 // 다음 페이지 확인
-                int totalCount = listResponse.getResponse().getBody().getTotalCount();
+                int totalCount = listResponse.getTotalCount();
                 hasMore = (page * perPage) < totalCount;
                 page++;
             }
@@ -117,74 +114,73 @@ public class AnnouncementService {
     }
 
     /**
-     * 개별 공고 처리
+     * 개별 LH 공고 처리: 상세조회 → PDF 다운로드 → DB 저장
+     * LH API 상세조회를 통해 첨부파일(PDF) URL을 가져옴
      */
     private AnnouncementFetchResponse.ProcessedAnnouncement processAnnouncement(
             AnnouncementListApiResponse.AnnouncementItem item, String date) {
 
-        log.info("Processing announcement: {} - {}", item.getHouseManageNo(), item.getHouseNm());
+        log.info("Processing LH announcement: {} - {}", item.getPanId(), item.getPanNm());
 
         try {
-            // 상세 조회
+            // 1. 상세조회 API 호출하여 첨부파일 정보 가져오기
             AnnouncementDetailApiResponse detailResponse = announcementApiService
-                    .getAnnouncementDetail(item.getHouseManageNo(), item.getPblancNo());
+                    .getAnnouncementDetail(
+                            item.getPanId(),           // PAN_ID
+                            item.getSplInfTpCd(),      // SPL_INF_TP_CD (공급정보구분코드)
+                            "02",                       // CCR_CNNT_SYS_DS_CD (고객센터연계시스템구분코드)
+                            item.getUppAisTpCd()       // UPP_AIS_TP_CD (상위매물유형코드)
+                    );
 
-            if (detailResponse == null
-                    || detailResponse.getResponse() == null
-                    || detailResponse.getResponse().getBody() == null
-                    || detailResponse.getResponse().getBody().getItems() == null
-                    || detailResponse.getResponse().getBody().getItems().getItem() == null
-                    || detailResponse.getResponse().getBody().getItems().getItem().isEmpty()) {
-                throw new RuntimeException("상세 정보를 찾을 수 없습니다");
+            if (detailResponse == null || !detailResponse.isSuccess()) {
+                log.warn("LH detail API failed for PAN_ID: {}", item.getPanId());
+                return buildFailedResponse(item, "상세 정보 조회 실패");
             }
 
+            // 2. PDF URL 추출
+            String pdfUrl = detailResponse.getPdfUrl();
 
-            // PDF URL 확인
-            String pdfUrl = item.getPblancUrl();
             if (pdfUrl == null || pdfUrl.isEmpty()) {
-                log.warn("No PDF URL found for announcement: {}", item.getHouseManageNo());
-                return AnnouncementFetchResponse.ProcessedAnnouncement.builder()
-                        .houseManageNo(item.getHouseManageNo())
-                        .pblancNo(item.getPblancNo())
-                        .houseNm(item.getHouseNm())
-                        .status("NO_PDF")
-                        .errorMessage("PDF URL이 없습니다")
-                        .build();
+                log.warn("No PDF URL found for LH announcement: {}", item.getPanId());
+                // PDF가 없어도 DTL_URL은 저장
+                return buildSuccessResponse(item, item.getDtlUrl());
             }
 
-            // PDF 다운로드
-            byte[] pdfBytes = announcementApiService.downloadPdf(pdfUrl);
+            // 3. TODO: PDF 다운로드 및 S3 업로드 (추후 구현)
+            // byte[] pdfBytes = announcementApiService.downloadPdf(pdfUrl);
+            // String s3Url = s3Service.uploadPdf(pdfBytes, date, fileName);
 
-            // S3 업로드
-            String fileName = String.format("%s_%s_%s.pdf",
-                    item.getHouseManageNo(),
-                    item.getPblancNo(),
-                    sanitizeFileName(item.getHouseNm()));
+            // 현재는 PDF URL만 저장
+            log.info("LH announcement processed - PDF URL: {}", pdfUrl);
 
-            String s3Url = s3Service.uploadPdf(pdfBytes, date, fileName);
-
-            return AnnouncementFetchResponse.ProcessedAnnouncement.builder()
-                    .houseManageNo(item.getHouseManageNo())
-                    .pblancNo(item.getPblancNo())
-                    .houseNm(item.getHouseNm())
-                    .s3Url(s3Url)
-                    .status("SUCCESS")
-                    .build();
+            return buildSuccessResponse(item, pdfUrl);
 
         } catch (Exception e) {
-            log.error("Failed to process announcement: {}", item.getHouseManageNo(), e);
-            throw new RuntimeException("공고 처리 실패: " + e.getMessage(), e);
+            log.error("Failed to process LH announcement: {}", item.getPanId(), e);
+            return buildFailedResponse(item, e.getMessage());
         }
     }
 
-    /**
-     * 파일명에 사용할 수 없는 문자 제거
-     */
-    private String sanitizeFileName(String fileName) {
-        if (fileName == null) {
-            return "unknown";
-        }
-        return fileName.replaceAll("[^a-zA-Z0-9가-힣_\\-]", "_");
+    private AnnouncementFetchResponse.ProcessedAnnouncement buildSuccessResponse(
+            AnnouncementListApiResponse.AnnouncementItem item, String url) {
+        return AnnouncementFetchResponse.ProcessedAnnouncement.builder()
+                .houseManageNo(item.getPanId())
+                .pblancNo(item.getPanNm())
+                .houseNm(item.getPanNm())
+                .s3Url(url)
+                .status("SUCCESS")
+                .build();
+    }
+
+    private AnnouncementFetchResponse.ProcessedAnnouncement buildFailedResponse(
+            AnnouncementListApiResponse.AnnouncementItem item, String errorMessage) {
+        return AnnouncementFetchResponse.ProcessedAnnouncement.builder()
+                .houseManageNo(item.getPanId())
+                .pblancNo(item.getPanNm())
+                .houseNm(item.getPanNm())
+                .status("FAILED")
+                .errorMessage(errorMessage)
+                .build();
     }
 }
 

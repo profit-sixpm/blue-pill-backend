@@ -1,112 +1,127 @@
 package com.sixpm.domain.announcement.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
 import java.util.List;
 
 /**
- * 청약 공고 리스트 조회 API 응답
+ * LH 분양임대공고문 조회 API 응답
+ * API: /B552555/lhLeaseNoticeInfo1/lhLeaseNoticeInfo1
  */
 @Data
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class AnnouncementListApiResponse {
-    @JsonProperty("response")
-    private Response response;
+
+    @JsonProperty("dsSch")
+    private List<SearchCondition> searchConditions;
+
+    @JsonProperty("resHeader")
+    private List<ResponseHeader> responseHeaders;
+
+    @JsonProperty("dsList")
+    private List<AnnouncementItem> dataList;
 
     @Data
-    public static class Response {
-        @JsonProperty("header")
-        private Header header;
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class SearchCondition {
+        @JsonProperty("PAN_ED_DT")
+        private String panEdDt;  // 공고종료일
 
-        @JsonProperty("body")
-        private Body body;
+        @JsonProperty("PAGE")
+        private String page;  // 페이지
+
+        @JsonProperty("PAN_ST_DT")
+        private String panStDt;  // 공고시작일
+
+        @JsonProperty("PG_SZ")
+        private String pgSz;  // 페이지 사이즈
     }
 
     @Data
-    public static class Header {
-        @JsonProperty("resultCode")
-        private String resultCode;
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class ResponseHeader {
+        @JsonProperty("SS_CODE")
+        private String ssCode;  // 결과코드 (Y/N)
 
-        @JsonProperty("resultMsg")
-        private String resultMsg;
+        @JsonProperty("RS_DTTM")
+        private String rsDttm;  // 출력일시
     }
 
     @Data
-    public static class Body {
-        @JsonProperty("items")
-        private Items items;
-
-        @JsonProperty("numOfRows")
-        private Integer numOfRows;
-
-        @JsonProperty("pageNo")
-        private Integer pageNo;
-
-        @JsonProperty("totalCount")
-        private Integer totalCount;
-    }
-
-    @Data
-    public static class Items {
-        @JsonProperty("item")
-        private List<AnnouncementItem> item;
-    }
-
-    @Data
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class AnnouncementItem {
-        @JsonProperty("HOUSE_MANAGE_NO")
-        private String houseManageNo;  // 주택관리번호
+        @JsonProperty("RNUM")
+        private String rnum;  // 순번
 
-        @JsonProperty("PBLANC_NO")
-        private String pblancNo;  // 공고번호
+        @JsonProperty("UPP_AIS_TP_NM")
+        private String uppAisTpNm;  // 공고유형명 (분양주택, 임대주택 등)
 
-        @JsonProperty("HOUSE_NM")
-        private String houseNm;  // 주택명
+        @JsonProperty("UPP_AIS_TP_CD")
+        private String uppAisTpCd;  // 공고유형코드
 
-        @JsonProperty("HOUSE_SECD")
-        private String houseSecd;  // 주택구분코드
+        @JsonProperty("AIS_TP_CD")
+        private String aisTpCd;  // 공고세부유형코드
 
-        @JsonProperty("HOUSE_SECD_NM")
-        private String houseSecdNm;  // 주택구분명
+        @JsonProperty("AIS_TP_CD_NM")
+        private String aisTpCdNm;  // 공고세부유형명 (행복주택 등)
 
-        @JsonProperty("SUBSCRPT_AREA_CODE")
-        private String subscrptAreaCode;  // 모집지역코드
+        @JsonProperty("PAN_ID")
+        private String panId;  // 공고ID (중요: 상세 조회 시 사용)
 
-        @JsonProperty("SUBSCRPT_AREA_CODE_NM")
-        private String subscrptAreaCodeNm;  // 모집지역명
+        @JsonProperty("PAN_NM")
+        private String panNm;  // 공고명
 
-        @JsonProperty("PBLANC_URL")
-        private String pblancUrl;  // 공고URL
+        @JsonProperty("PAN_DT")
+        private String panDt;  // 공고일자 (YYYYMMDD)
 
-        @JsonProperty("RCEPT_BGNDE")
-        private String rceptBgnde;  // 접수시작일
+        @JsonProperty("PAN_NT_ST_DT")
+        private String panNtStDt;  // 공고게시일 (YYYY.MM.DD)
 
-        @JsonProperty("RCEPT_ENDDE")
-        private String rceptEndde;  // 접수종료일
+        @JsonProperty("CNP_CD")
+        private String cnpCd;  // 지역코드
 
-        @JsonProperty("SPSPLY_RCEPT_BGNDE")
-        private String spsplyRceptBgnde;  // 특별공급 접수시작일
+        @JsonProperty("CNP_CD_NM")
+        private String cnpCdNm;  // 지역명
 
-        @JsonProperty("SPSPLY_RCEPT_ENDDE")
-        private String spsplyRceptEndde;  // 특별공급 접수종료일
+        @JsonProperty("PAN_SS")
+        private String panSs;  // 공고상태 (공고중, 접수중, 접수마감 등)
 
-        @JsonProperty("GNRL_RCEPT_BGNDE")
-        private String gnrlRceptBgnde;  // 일반공급 접수시작일
+        @JsonProperty("CLSG_DT")
+        private String clsgDt;  // 공고마감일 (YYYY.MM.DD)
 
-        @JsonProperty("GNRL_RCEPT_ENDDE")
-        private String gnrlRceptEndde;  // 일반공급 접수종료일
+        @JsonProperty("ALL_CNT")
+        private String allCnt;  // 전체조회건수
 
-        @JsonProperty("PRZWNER_PRESNATN_DE")
-        private String przwnerPresnatnDe;  // 당첨자발표일
+        @JsonProperty("DTL_URL")
+        private String dtlUrl;  // 공고상세 URL
 
-        @JsonProperty("CNTRCT_CNCLS_BGNDE")
-        private String cntrctCnclsBgnde;  // 계약시작일
+        @JsonProperty("SPL_INF_TP_CD")
+        private String splInfTpCd;  // 특별정보유형코드
+    }
 
-        @JsonProperty("CNTRCT_CNCLS_ENDDE")
-        private String cntrctCnclsEndde;  // 계약종료일
+    // 편의 메서드
+    public boolean isSuccess() {
+        if (responseHeaders == null || responseHeaders.isEmpty()) {
+            return false;
+        }
+        return "Y".equals(responseHeaders.get(0).getSsCode());
+    }
 
-        @JsonProperty("HSSPLY_ADRES")
-        private String hssplyAdres;  // 공급위치
+    public int getTotalCount() {
+        if (dataList == null || dataList.isEmpty()) {
+            return 0;
+        }
+        try {
+            return Integer.parseInt(dataList.get(0).getAllCnt());
+        } catch (NumberFormatException e) {
+            return dataList.size();
+        }
+    }
+
+    public List<AnnouncementItem> getItems() {
+        return dataList;
     }
 }
 
