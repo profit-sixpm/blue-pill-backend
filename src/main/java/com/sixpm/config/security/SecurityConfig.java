@@ -30,11 +30,16 @@ public class SecurityConfig {
 
 	// CORS 설정 상수
 	private static final List<String> ALLOWED_ORIGINS = Arrays.asList(
+		"http://localhost:3000",
+		"https://localhost:3000",
 		"http://localhost:5173",
 		"https://localhost:5173",
+		"http://localhost:8080",     // Swagger UI
+		"https://localhost:8080",    // Swagger UI (HTTPS)
 		"http://blue-pill.me",
 		"https://blue-pill.me",
-		"https://www.blue-pill.me"
+		"https://www.blue-pill.me",
+		"https://api.blue-pill.me"   // API 도메인
 	);
 
 	private static final List<String> ALLOWED_METHODS = Arrays.asList(
@@ -103,7 +108,7 @@ public class SecurityConfig {
 	@Bean
 	public CorsConfigurationSource corsConfigurationSource() {
 		CorsConfiguration configuration = new CorsConfiguration();
-		configuration.setAllowedOriginPatterns(ALLOWED_ORIGINS);
+		configuration.setAllowedOrigins(ALLOWED_ORIGINS);  // 정확한 URL 매칭
 		configuration.setAllowedMethods(ALLOWED_METHODS);
 		configuration.setAllowedHeaders(List.of("*"));
 		configuration.setAllowCredentials(true);
