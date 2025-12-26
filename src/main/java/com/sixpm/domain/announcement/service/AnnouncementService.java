@@ -28,6 +28,7 @@ public class AnnouncementService {
 
     private final AnnouncementApiService announcementApiService;
     private final com.sixpm.domain.announcement.repository.AnnouncementRepository announcementRepository;
+    private final AnnouncementProcessingService announcementProcessingService;
 
     /**
      * 특정 날짜의 청약 공고를 조회하고 PDF를 S3에 업로드
@@ -201,6 +202,11 @@ public class AnnouncementService {
             com.sixpm.domain.announcement.entity.Announcement saved = announcementRepository.save(announcement);
             log.info("Saved announcement to DB: ID={}, PAN_ID={}, PDF_URL={}",
                     saved.getId(), saved.getHouseManageNo(), saved.getPdfFileUrl());
+
+            // 5. 비동기 상세 처리 (파싱, 자격요건 추출, 임베딩)
+            if (saved.getPdfFileUrl() != null && !saved.getPdfFileUrl().isBlank()) {
+                announcementProcessingService.processAnnouncementAsync(saved.getId());
+            }
 
             return buildSuccessResponse(item, pdfUrl != null ? pdfUrl : item.getDtlUrl());
 

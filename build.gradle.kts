@@ -31,6 +31,7 @@ dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-validation")
 
 	// Spring AI
+	implementation("org.springframework.ai:spring-ai-rag")
 	implementation("org.springframework.ai:spring-ai-starter-vector-store-pgvector")
 	implementation("org.springframework.ai:spring-ai-pdf-document-reader")
 	implementation("org.springframework.ai:spring-ai-starter-model-openai")

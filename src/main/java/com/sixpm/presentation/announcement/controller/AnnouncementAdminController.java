@@ -11,6 +11,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import com.sixpm.domain.announcement.service.AnnouncementProcessingService; // Import 추가
+
 /**
  * 청약 공고 관리 컨트롤러 (Admin)
  */
@@ -22,6 +24,7 @@ import org.springframework.web.bind.annotation.*;
 public class AnnouncementAdminController {
 
     private final AnnouncementService announcementService;
+    private final AnnouncementProcessingService processingService;
 
     @PostMapping("/fetch")
     @Operation(
@@ -37,6 +40,17 @@ public class AnnouncementAdminController {
         AnnouncementFetchResponse response = announcementService.fetchAndUploadAnnouncements(request);
 
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/{id}/process")
+    @Operation(
+            summary = "공고 상세 처리 수동 실행",
+            description = "특정 공고 ID에 대해 파싱, 정보 추출, 벡터 임베딩 작업을 비동기로 다시 실행합니다."
+    )
+    public ResponseEntity<String> processAnnouncement(@PathVariable Long id) {
+        log.info("Manual trigger for processing announcement ID: {}", id);
+        processingService.processAnnouncementAsync(id);
+        return ResponseEntity.ok("Processing started asynchronously for ID: " + id);
     }
 }
 
