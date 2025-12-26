@@ -114,7 +114,7 @@ jobs:
             docker compose pull
             
             # 기존 컨테이너 및 고아 컨테이너 정리 (에러 방지)
-            docker compose down --remove-orphans || true
+            docker compose down backend
             
             # 컨테이너 실행
             docker compose up -d
