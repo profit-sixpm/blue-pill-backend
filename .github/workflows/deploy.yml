@@ -110,9 +110,14 @@ jobs:
             # docker-compose.prod.yml이 있는 디렉토리로 이동 (필요시)
             cd /home/ubuntu/
             
-            # 최신 이미지 pull 및 컨테이너 실행
-            docker-compose -f docker-compose.prod.yml pull
-            docker-compose -f docker-compose.prod.yml up -d
+            # 최신 이미지 pull
+            docker compose -f docker-compose.prod.yml pull
+            
+            # 기존 컨테이너 및 고아 컨테이너 정리 (에러 방지)
+            docker compose -f docker-compose.prod.yml down --remove-orphans || true
+            
+            # 컨테이너 실행
+            docker compose -f docker-compose.prod.yml up -d
             
             # 사용하지 않는 이미지 정리
             docker image prune -a -f
