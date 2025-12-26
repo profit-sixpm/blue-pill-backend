@@ -24,11 +24,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.AdvisorParams;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.document.Document;
-import org.springframework.ai.rag.Query;
 import org.springframework.ai.rag.advisor.RetrievalAugmentationAdvisor;
 import org.springframework.ai.rag.generation.augmentation.ContextualQueryAugmenter;
-import org.springframework.ai.rag.preretrieval.query.expansion.MultiQueryExpander;
-import org.springframework.ai.rag.preretrieval.query.transformation.RewriteQueryTransformer;
 import org.springframework.ai.rag.retrieval.search.VectorStoreDocumentRetriever;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
@@ -51,8 +48,6 @@ public class ReportService {
     private final VectorStore vectorStore;
     private final AnnouncementRepository announcementRepository;
     private final AnnouncementCriteriaRepository criteriaRepository;
-    private final RewriteQueryTransformer queryTransformer;
-    private final MultiQueryExpander queryExpander;
     private final ChatClient chatClient;
     private final RetrievalAugmentationAdvisor ragAdvisor;
     private final Resource systemPromptResource;
@@ -73,18 +68,7 @@ public class ReportService {
 
         this.chatClient = chatClientBuilder.build();
 
-        // 1. 쿼리 변환기 (검색어 최적화)
-        this.queryTransformer = RewriteQueryTransformer.builder()
-                .chatClientBuilder(chatClientBuilder)
-                .build();
-
-        // 2. 쿼리 확장기 (다각도 검색)
-        this.queryExpander = MultiQueryExpander.builder()
-                .chatClientBuilder(chatClientBuilder)
-                .numberOfQueries(3)
-                .build();
-
-        // 3. RAG Advisor 구성
+        // RAG Advisor 초기화 (생성 단계에서는 필터 없이 기본 구성)
         var documentRetriever = VectorStoreDocumentRetriever.builder()
                 .vectorStore(vectorStore)
                 .similarityThreshold(0.5)
@@ -102,36 +86,33 @@ public class ReportService {
     }
 
     /**
-     * 공고 자연어 검색 (RAG + Query Optimization + Expansion)
+     * 공고 자연어 검색 (Query Optimization)
      */
     public List<AnnouncementItem> searchAnnouncements(String query) {
         log.info("Original query: {}", query);
 
-        // 1. 쿼리 최적화
-        Query originalQuery = new Query(query);
-        Query optimizedQuery = queryTransformer.transform(originalQuery);
-        log.info("Optimized query: {}", optimizedQuery.text());
+        // 1. 쿼리 최적화 (LLM 직접 호출하여 시스템/유저 프롬프트 분리)
+        String optimizedQuery = chatClient.prompt()
+                .system("당신은 주택 청약 검색 전문가입니다. 사용자의 질문을 분석하여 주택 청약 공고 데이터베이스 검색에 최적화된 핵심 키워드 중심의 쿼리로 변환하세요.")
+                .user(query) // 유저 프롬프트는 입력받은 값 그대로 전달
+                .call()
+                .content();
 
-        // 2. 쿼리 확장
-        List<Query> expandedQueries = queryExpander.expand(optimizedQuery);
-        log.info("Expanded queries: {}", expandedQueries.stream().map(Query::text).toList());
+        log.info("Optimized query: {}", optimizedQuery);
 
-        // 3. Vector Store 검색
-        List<Document> documents = new ArrayList<>();
-        for (Query q : expandedQueries) {
-            documents.addAll(vectorStore.similaritySearch(
-                    SearchRequest.builder().query(q.text())
-                            .topK(5)
-                            .similarityThreshold(0.5)
-                            .build()
-            ));
-        }
+        // 2. Vector Store 검색 (최적화된 쿼리 사용)
+        List<Document> documents = vectorStore.similaritySearch(
+                SearchRequest.builder().query(optimizedQuery)
+                        .topK(5)
+                        .similarityThreshold(0.5)
+                        .build()
+        );
 
         if (documents.isEmpty()) {
             return Collections.emptyList();
         }
 
-        // 4. 공고 ID 추출 (중복 제거)
+        // 3. 공고 ID 추출 (중복 제거)
         Set<Long> announcementIds = documents.stream()
                 .map(doc -> {
                     Object idObj = doc.getMetadata().get("notice_id");
@@ -144,7 +125,7 @@ public class ReportService {
             return Collections.emptyList();
         }
 
-        // 5. DB 조회 및 반환
+        // 4. DB에서 공고 정보 조회
         List<Announcement> announcements = announcementRepository.findAllById(announcementIds);
         return announcements.stream()
                 .map(this::convertToAnnouncementItem)
@@ -164,7 +145,7 @@ public class ReportService {
         AnnouncementCriteria criteria = criteriaRepository.findByAnnouncementId(announcement.getId())
                 .orElseThrow(() -> new IllegalArgumentException("해당 공고의 상세 자격 요건 정보가 없습니다."));
 
-        // 정량 분석
+        // 정량 분석 (Rule Engine)
         List<DetailItem> details = analyzeEligibility(request, criteria);
         
         boolean isAllPassed = details.stream().filter(d -> !d.category().equals("가점")).allMatch(DetailItem::passed);
@@ -174,6 +155,7 @@ public class ReportService {
         // 정성 분석 (AI 컨설팅)
         AiConsulting consulting = generateAiConsulting(request, announcement, status, details);
 
+        // 유저 정보 업데이트/생성
         saveUserDetailInfo(userId, request);
 
         return new ReportResponse(status, totalScore, details, consulting);
@@ -188,17 +170,17 @@ public class ReportService {
                 .map(d -> String.format("- %s: %s (%s)", d.category(), d.passed() ? "충족" : "미충족", d.message()))
                 .collect(Collectors.joining("\n"));
 
+        // RAG 검색을 유도하기 위한 유저 프롬프트 구성
         String userPrompt;
         if ("PASS".equals(status)) {
             userPrompt = """
                 이 공고의 '당첨자 선정 방법', '가점 기준', '제출 서류', '계약 체결 절차' 정보를 중점적으로 검색해서 알려줘.
-                그리고 이를 바탕으로 당첨 확률을 높일 수 있는 전략과, 입주까지의 구체적인 로드맵(자금, 서류 등)을 조언해줘.
+                그리고 이를 바탕으로 당첨 확률을 높일 수 있는 전략과, 입주까지의 구체적인 로드맵을 조언해줘.
                 """;
         } else {
             userPrompt = """
                 이 공고의 '신청 자격', '소득 및 자산 보유 기준', '공급 대상별 세부 요건' 정보를 중점적으로 검색해서 알려줘.
-                특히 사용자가 미충족한 항목에 대한 구체적인 조항을 찾아서 탈락 사유를 설명하고,
-                '특별공급', '우선공급' 등 예외적으로 지원 가능한 다른 전형이 있는지 찾아서 대안을 제시해줘.
+                특히 사용자가 미충족한 항목에 대한 구체적인 조항을 찾아서 탈락 사유를 설명하고 대안을 제시해줘.
                 """;
         }
 
@@ -214,6 +196,23 @@ public class ReportService {
                 .user(userPrompt)
                 .call()
                 .entity(AiConsulting.class);
+    }
+
+    private void saveUserDetailInfo(Long userId, CreateReportRequest request) {
+        UserDetailInfo userDetailInfo = userDetailInfoRepository.findByUserId(userId)
+                .orElseGet(() -> UserDetailInfo.builder().userId(userId).build());
+
+        userDetailInfo.update(
+                request.getAge(), request.getResidenceArea(), request.getResidencePeriod(),
+                request.getHouseholdMembers(), request.getMinorChildren(),
+                request.getIsHomelessHouseholder(), request.getIsSingleParent(), request.getIsMarried(),
+                request.getMonthlyIncome(), request.getTotalAssets(), request.getCarValue(),
+                request.getHasSavingsAccount(), request.getPaymentCount(),
+                request.getAdditionalQualifications(), request.getIsDisabled(),
+                request.getIsSeverelyDisabled(), request.getIsPrioritySupply()
+        );
+
+        userDetailInfoRepository.save(userDetailInfo);
     }
 
     private String formatUserProfile(CreateReportRequest u) {
@@ -239,49 +238,19 @@ public class ReportService {
         );
     }
 
-    private void saveUserDetailInfo(Long userId, CreateReportRequest request) {
-        UserDetailInfo userDetailInfo = userDetailInfoRepository.findByUserId(userId)
-                .orElseGet(() -> UserDetailInfo.builder().userId(userId).build());
-
-        userDetailInfo.update(
-                request.getAge(),
-                request.getResidenceArea(),
-                request.getResidencePeriod(),
-                request.getHouseholdMembers(),
-                request.getMinorChildren(),
-                request.getIsHomelessHouseholder(),
-                request.getIsSingleParent(),
-                request.getIsMarried(),
-                request.getMonthlyIncome(),
-                request.getTotalAssets(),
-                request.getCarValue(),
-                request.getHasSavingsAccount(),
-                request.getPaymentCount(),
-                request.getAdditionalQualifications(),
-                request.getIsDisabled(),
-                request.getIsSeverelyDisabled(),
-                request.getIsPrioritySupply()
-        );
-
-        userDetailInfoRepository.save(userDetailInfo);
-    }
-
     private List<DetailItem> analyzeEligibility(CreateReportRequest user, AnnouncementCriteria criteria) {
         List<DetailItem> details = new ArrayList<>();
 
-        // 거주지 분석
         String criteriaRegion = criteria.getResidenceRegion();
         boolean regionPassed = criteriaRegion == null || user.getResidenceArea().contains(criteriaRegion);
         details.add(new DetailItem("거주지", regionPassed, user.getResidenceArea(), 
                 criteriaRegion != null ? criteriaRegion : "제한 없음",
                 regionPassed ? "거주지 요건을 충족합니다." : "공고 지역 거주자가 아닙니다."));
 
-        // 나이 분석
         boolean agePassed = user.getAge() >= criteria.getMinAge();
         details.add(new DetailItem("연령", agePassed, "만 " + user.getAge() + "세", "만 " + criteria.getMinAge() + "세 이상",
                 agePassed ? "신청 가능 연령입니다." : "신청 최소 연령에 미달합니다."));
 
-        // 자산 분석
         int childCount = Math.min(user.getMinorChildren(), 2);
         AnnouncementCriteria.AssetLimitRule assetRule = criteria.getAssetLimits().stream()
                 .filter(r -> r.childCount() == childCount)
@@ -293,7 +262,6 @@ public class ReportService {
                 String.format("%,d원 이하", assetRule.assetLimit()),
                 assetPassed ? "자산 보유 기준 이내입니다." : "총자산 기준을 초과하였습니다."));
 
-        // 소득 분석
         Long benchmark = criteria.getIncomeBenchmark().getOrDefault(Math.min(user.getHouseholdMembers(), 8), 7000000L);
         long incomeLimit = (long) (benchmark * 0.7);
         boolean incomePassed = user.getMonthlyIncome() <= incomeLimit;
@@ -344,6 +312,7 @@ public class ReportService {
         if (authentication == null || !authentication.isAuthenticated()) {
             return 1L; 
         }
+        // TODO: JWT에서 실제 userId 추출
         return 1L;
     }
 }
