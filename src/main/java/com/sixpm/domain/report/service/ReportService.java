@@ -242,7 +242,7 @@ public class ReportService {
         List<DetailItem> details = new ArrayList<>();
 
         String criteriaRegion = criteria.getResidenceRegion();
-        boolean regionPassed = criteriaRegion == null || user.getResidenceArea().contains(criteriaRegion);
+        boolean regionPassed = criteriaRegion == null || criteriaRegion.contains(user.getResidenceArea());
         details.add(new DetailItem("거주지", regionPassed, user.getResidenceArea(), 
                 criteriaRegion != null ? criteriaRegion : "제한 없음",
                 regionPassed ? "거주지 요건을 충족합니다." : "공고 지역 거주자가 아닙니다."));
